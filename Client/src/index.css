@@ -1,0 +1,48 @@
+@import "tailwindcss";
+/* html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: radial-gradient(
+    circle at top left,
+    #1b2430,
+    #0b0f14 60%
+  );
+  color: #e5e7eb;
+} */
+
+* {
+  box-sizing: border-box;
+}
+html, body, #root {
+ 
+  margin: 0;
+  padding: 0;
+   height: 100%;
+  overflow-x: hidden;
+
+  color:white;
+  
+   background: linear-gradient(
+    135deg,
+    #0b1220 0%,
+    #0e1a2b 50%,
+    #0b1220 100%
+  );
+}
+
+
+
+/* Hide scrollbar but keep scroll functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+
+
+
