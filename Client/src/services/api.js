@@ -5,6 +5,8 @@ const api = axios.create({
   params: {
     api_key: import.meta.env.VITE_TMDB_API_KEY,
   },
+  timeout: 8000,
 });
 
 export default api;
+

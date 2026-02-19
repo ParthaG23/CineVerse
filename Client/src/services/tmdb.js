@@ -171,3 +171,66 @@ export const searchContent = async (type = "movie", query) => {
     return [];
   }
 };
+
+/* =========================
+   MOVIE CREDITS (CAST & CREW)
+========================= */
+export const getMovieCredits = async (id, type = "movie") => {
+  try {
+    const res = await api.get(`/${type}/${id}/credits`, {
+      timeout: 8000,
+    });
+    return res.data; // important for MovieDetails
+  } catch (error) {
+    console.error("Credits Error:", error);
+    return { cast: [], crew: [] };
+  }
+};
+
+/* =========================
+   HINDI DUBBED MOVIES
+========================= */
+export const getHindiDubbed = async () => {
+  try {
+    const res = await api.get("/discover/movie", {
+      params: {
+        sort_by: "popularity.desc",
+        include_adult: false,
+        language: "hi-IN",
+        with_original_language: "en", // safer than pipe syntax
+      },
+      timeout: 8000,
+    });
+
+    return res.data?.results || [];
+  } catch (error) {
+    console.error("Hindi Dubbed Error:", error);
+    return [];
+  }
+};
+/* =========================
+   MOVIES BY REGION
+========================= */
+export const getMoviesByRegion = async (
+  type = "movie",
+  region = null,
+  language = null
+) => {
+  try {
+    const res = await api.get(`/discover/${type}`, {
+      params: {
+        sort_by: "popularity.desc",
+        region: region || undefined,
+        with_original_language: language || undefined,
+        include_adult: false,
+      },
+      timeout: 8000,
+    });
+
+    return res.data?.results || [];
+  } catch (error) {
+    console.error("Region Movies Error:", error);
+    return [];
+  }
+};
+

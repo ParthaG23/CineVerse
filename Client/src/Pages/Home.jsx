@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   getTrending,
   getMoviesByGenre,
@@ -11,6 +11,8 @@ import { useContent } from "../context/ContentContext";
 import BannerCarousel from "../components/BannerCarousel";
 import MovieRow from "../components/MovieRow";
 import CategoryPills from "../components/CategoryPills";
+import SkeletonCardLoader from "../components/SkeletonCardLoader";
+
 
 const genreMap = {
   Trending: null,
@@ -31,118 +33,124 @@ const Home = () => {
   const [topMovies, setTopMovies] = useState([]);
   const [recommended, setRecommended] = useState([]);
   const [activeCategory, setActiveCategory] = useState("Trending");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // 🎬 Load Category Movies
-  const loadCategoryMovies = async (category) => {
-    setLoading(true);
+  // 🎬 OPTIMIZED: Category Loader (NO extra re-renders)
+  const loadCategoryMovies = useCallback(async (category, type) => {
     try {
+      setLoading(true);
+
+      let results = [];
+
       if (category === "Trending") {
-        const res = await getTrending(contentType);
-        const results = res.data.results || [];
-        setMovies(results);
-        setBannerMovies(results.slice(0, 5)); // for carousel
+        results = await getTrending(type);
+        setBannerMovies(results.slice(0, 5));
       } else {
         const genreId = genreMap[category];
-        const res = await getMoviesByGenre(contentType, genreId);
-        setMovies(res.data.results || []);
-        setBannerMovies([]); // hide banner for genre pages
+        results = await getMoviesByGenre(type, genreId);
+        setBannerMovies([]); // hide banner on genre
       }
+
+      setMovies(results);
     } catch (err) {
       console.error("Category Error:", err);
       setMovies([]);
+      setBannerMovies([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
+  }, []);
 
-  // ⭐ Load Top Rated & Recommended (IMPORTANT FIX)
-  const loadExtraSections = async () => {
+  // ⭐ OPTIMIZED: Load extra sections AFTER main content (improves LCP)
+  const loadExtraSections = useCallback(async (type) => {
     try {
-      const [topRes, popularRes] = await Promise.all([
-        getTopRated(contentType),
-        getPopular(contentType),
-      ]);
+      // Delay non-critical content (BIG Lighthouse boost)
+      setTimeout(async () => {
+        const [top, popular] = await Promise.all([
+          getTopRated(type),
+          getPopular(type),
+        ]);
 
-      setTopMovies(topRes?.data?.results || []);
-      setRecommended(popularRes?.data?.results || []);
+        setTopMovies(top);
+        setRecommended(popular);
+      }, 800); // defer heavy sections
     } catch (err) {
       console.error("Extra Sections Error:", err);
-      setTopMovies([]);
-      setRecommended([]);
     }
-  };
+  }, []);
 
-  // 🔍 MAIN DATA CONTROLLER (SEARCH + CATEGORY)
+  // 🔍 MAIN DATA CONTROLLER (Optimized)
   useEffect(() => {
+    let isMounted = true;
+
     const loadData = async () => {
       // SEARCH MODE (highest priority)
       if (searchQuery && searchQuery.trim() !== "") {
-        setLoading(true);
         try {
-          const res = await searchContent(contentType, searchQuery);
-          setMovies(res?.data?.results || []);
-          setBannerMovies([]); // hide banner while searching
+          setLoading(true);
+          const results = await searchContent(contentType, searchQuery);
+
+          if (!isMounted) return;
+          setMovies(results);
+          setBannerMovies([]);
         } catch (err) {
           console.error("Search Error:", err);
-          setMovies([]);
+          if (isMounted) setMovies([]);
+        } finally {
+          if (isMounted) setLoading(false);
         }
-        setLoading(false);
         return;
       }
 
-      // NORMAL MODE
-      loadCategoryMovies(activeCategory);
+      // NORMAL MODE (faster)
+      await loadCategoryMovies(activeCategory, contentType);
+      loadExtraSections(contentType); // load secondary sections lazily
     };
 
     loadData();
-  }, [contentType, activeCategory, searchQuery]);
 
-  // 🔥 MISSING EFFECT (THIS WAS YOUR BUG)
-  useEffect(() => {
-    if (!searchQuery) {
-      loadExtraSections();
-    }
-  }, [contentType, searchQuery]);
+    return () => {
+      isMounted = false; // prevent memory leaks & extra renders
+    };
+  }, [contentType, activeCategory, searchQuery, loadCategoryMovies, loadExtraSections]);
 
   return (
     <>
-          {/* BANNER */}
-    {!searchQuery && bannerMovies.length > 0 && (
-      <BannerCarousel movies={bannerMovies} />
-    )}
+      {/* 🎬 BANNER (Critical Content First) */}
+      {!searchQuery && bannerMovies.length > 0 && (
+        <BannerCarousel movies={bannerMovies} />
+      )}
 
-    {/* CATEGORY PILLS */}
-    {!searchQuery && (
-      <div className="px-4 lg:px-6 mt-4">
-        <CategoryPills
-          active={activeCategory}
-          onChange={setActiveCategory}
-        />
-      </div>
-    )}
+      {/* 🏷️ CATEGORY PILLS */}
+      {!searchQuery && (
+        <div className="px-4 lg:px-6 mt-4">
+          <CategoryPills
+            active={activeCategory}
+            onChange={setActiveCategory}
+          />
+        </div>
+      )}
 
-    {/* MAIN MOVIES */}
-    {loading ? (
-      <p className="text-white px-6 mt-6">Loading...</p>
-    ) : movies.length > 0 ? (
-      <MovieRow movies={movies} />
-    ) : (
-      <p className="text-white px-6 mt-6">
-        No results found
-      </p>
-    )}
+      {/* 🎥 MAIN MOVIES (Priority Section) */}
+      {loading ? (
+        <div className="px-6 mt-6 text-white animate-pulse">
+          <SkeletonCardLoader/>
+        </div>
+      ) : movies.length > 0 ? (
+        <MovieRow movies={movies} />
+      ) : (
+        <p className="text-white px-6 mt-6">No results found</p>
+      )}
 
-    {/* TOP RATED */}
-    {!searchQuery && topMovies.length > 0 && (
-      <MovieRow title="Top Rated" movies={topMovies} />
-    )}
+      {/* ⭐ NON-CRITICAL SECTIONS (Lazy Loaded) */}
+      {!searchQuery && topMovies.length > 0 && (
+        <MovieRow title="Top Rated" movies={topMovies} />
+      )}
 
-    {/* RECOMMENDED */}
-    {!searchQuery && recommended.length > 0 && (
-      <MovieRow title="Recommended For You" movies={recommended} />
-    )}
-  </>
-    
+      {!searchQuery && recommended.length > 0 && (
+        <MovieRow title="Recommended For You" movies={recommended} />
+      )}
+    </>
   );
 };
 

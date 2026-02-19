@@ -1,23 +1,37 @@
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
-import Footer from "./Footer"
+import Footer from "./Footer";
 
 const Layout = ({ children }) => {
   return (
-    <div className="h-screen overflow-hidden flex">
-      {/* Sidebar */}
+    <div className="min-h-screen flex bg-black text-white">
+      {/* 🧭 Sidebar (Fixed for better performance) */}
       <Sidebar />
 
-      {/* Main content wrapper */}
-      <div className="flex-1 lg:ml-56 h-full overflow-y-auto no-scrollbar">
-        {/* Top bar */}
-        <TopBar />
+      {/* 📦 Main Content Area */}
+      <div className="flex-1 lg:ml-56 flex flex-col min-h-screen">
+        {/* 🔝 TopBar (Sticky improves UX) */}
+        <div className="sticky top-0 z-40">
+          <TopBar />
+        </div>
 
-        {/* Page content */}
-        <main className="px-6 max-w-[1200px] mx-auto pb-10">
+        {/* 🧱 Scrollable Page Content */}
+        <main
+          className="
+            flex-1 
+            px-4 sm:px-6 
+            max-w-[1200px] 
+            w-full 
+            mx-auto 
+            pb-12 
+            overflow-x-hidden
+          "
+        >
           {children}
-          <Footer/>
         </main>
+
+        {/* 🔻 Footer (Separated for better rendering performance) */}
+        <Footer />
       </div>
     </div>
   );
