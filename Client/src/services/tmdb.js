@@ -1,154 +1,173 @@
 import api from "./api";
 
 /* =========================
-   TRENDING
+   SIMPLE IN-MEMORY CACHE
 ========================= */
-// 🔥 TRENDING
-export const getTrending = (type = "movie") => {
-  if (type === "anime") {
-    // Anime = TV + Animation genre
-    return api.get("/discover/tv", {
-      params: { with_genres: 16 },
-    });
+const cache = new Map();
+const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
+
+const fetchWithCache = async (key, requestFn) => {
+  const now = Date.now();
+
+  if (cache.has(key)) {
+    const { data, expiry } = cache.get(key);
+    if (now < expiry) return data;
   }
 
-  return api.get(`/trending/${type}/week`);
-};
+  try {
+    const res = await requestFn();
+    const results = res?.data?.results || [];
 
-
-// 🔥 GENRE FILTER
-export const getMoviesByGenre = (type = "movie", genreId) => {
-  if (type === "anime") {
-    return api.get("/discover/tv", {
-      params: {
-        with_genres: 16,
-      },
+    cache.set(key, {
+      data: results,
+      expiry: now + CACHE_TTL,
     });
+
+    return results;
+  } catch (error) {
+    console.error("TMDB Error:", error?.response?.data || error.message);
+    return [];
   }
-
-  return api.get(`/discover/${type}`, {
-    params: { with_genres: genreId },
-  });
 };
-
 
 /* =========================
-   POPULAR
+   TRENDING (FAST + CACHED)
 ========================= */
-export const getPopular = (type = "movie") => {
+export const getTrending = (type = "movie") => {
+  const key = `trending-${type}`;
+
   if (type === "anime") {
-    return api.get("/discover/tv", {
+    return fetchWithCache(key, () =>
+      api.get("/discover/tv", {
+        params: {
+          with_genres: 16,
+          sort_by: "popularity.desc",
+        },
+        timeout: 8000,
+      })
+    );
+  }
+
+  return fetchWithCache(key, () =>
+    api.get(`/trending/${type}/week`, { timeout: 8000 })
+  );
+};
+
+/* =========================
+   GENRE FILTER (OPTIMIZED)
+========================= */
+export const getMoviesByGenre = (type = "movie", genreId) => {
+  const key = `genre-${type}-${genreId}`;
+
+  if (type === "anime") {
+    return fetchWithCache(key, () =>
+      api.get("/discover/tv", {
+        params: {
+          with_genres: 16,
+          sort_by: "popularity.desc",
+        },
+        timeout: 8000,
+      })
+    );
+  }
+
+  return fetchWithCache(key, () =>
+    api.get(`/discover/${type}`, {
       params: {
-        with_genres: 16,
+        with_genres: genreId,
         sort_by: "popularity.desc",
       },
-    });
-  }
-
-  return api.get(`/${type}/popular`);
+      timeout: 8000,
+    })
+  );
 };
 
 /* =========================
-   DETAILS
+   POPULAR (CACHED)
 ========================= */
-export const getDetails = (id, type = "movie") =>
-  api.get(`/${type}/${id}`);
-
-/* =========================
-   VIDEOS
-========================= */
-export const getVideos = (id, type = "movie") =>
-  api.get(`/${type}/${id}/videos`);
-
-
-  
-  export const getMovieCredits = (id) =>
-  api.get(`/movie/${id}/credits`);
-
-
-
-
-export const getMoviesByRegion = (
-  type = "movie",
-  region = null,
-  language = null
-) => {
-  return api.get(`/discover/${type}`, {
-    params: {
-      sort_by: "popularity.desc",
-      region: region || undefined,
-      with_original_language: language || undefined,
-      include_adult: false,
-    },
-  });
-};
-// 🔥 Hindi Dubbed (Non-Hindi movies available in Hindi UI)
-export const getHindiDubbed = () => {
-  return api.get("/discover/movie", {
-    params: {
-      sort_by: "popularity.desc",
-      with_original_language: "en|te|ta|ml|ko|ja", // non-hindi industries
-      with_watch_monetization_types: "flatrate",
-      include_adult: false,
-      language: "hi-IN", // Hindi UI (closer to dubbed catalog)
-      page: 1,
-    },
-  });
-};
-
-/* =========================
-   TOP RATED (🔥 FIX ERROR)
-========================= */
-// ⭐ CATEGORY-AWARE TOP RATED
-export const getTopRated = (
-  type = "movie",
-  region = null,
-  language = null
-) => {
-  return api.get(`/discover/${type}`, {
-    params: {
-      sort_by: "vote_average.desc",
-      "vote_count.gte": 500, // avoid low vote trash results
-      region: region || undefined,
-      with_original_language: language || undefined,
-      include_adult: false,
-    },
-  });
-};
-
-// 🎬 CATEGORY-AWARE RECOMMENDED (POPULAR)
-export const getRecommendedByCategory = (
-  type = "movie",
-  region = null,
-  language = null
-) => {
-  return api.get(`/discover/${type}`, {
-    params: {
-      sort_by: "popularity.desc",
-      region: region || undefined,
-      with_original_language: language || undefined,
-      include_adult: false,
-    },
-  });
-};
-
-
-/* =========================
-   SEARCH
-========================= */
-export const searchContent = (type = "movie", query) => {
-  if (!query || query.trim() === "") {
-    return Promise.resolve({ data: { results: [] } });
-  }
+export const getPopular = (type = "movie") => {
+  const key = `popular-${type}`;
 
   if (type === "anime") {
-    return api.get("/search/tv", {
-      params: { query },
-    });
+    return fetchWithCache(key, () =>
+      api.get("/discover/tv", {
+        params: {
+          with_genres: 16,
+          sort_by: "popularity.desc",
+        },
+        timeout: 8000,
+      })
+    );
   }
 
-  return api.get(`/search/${type}`, {
-    params: { query },
-  });
+  return fetchWithCache(key, () =>
+    api.get(`/${type}/popular`, { timeout: 8000 })
+  );
 };
 
+/* =========================
+   TOP RATED (OPTIMIZED)
+========================= */
+export const getTopRated = (type = "movie") => {
+  const key = `top-rated-${type}`;
+
+  return fetchWithCache(key, () =>
+    api.get(`/discover/${type}`, {
+      params: {
+        sort_by: "vote_average.desc",
+        "vote_count.gte": 500,
+        include_adult: false,
+      },
+      timeout: 8000,
+    })
+  );
+};
+
+/* =========================
+   DETAILS (NO CACHE - REALTIME)
+========================= */
+export const getDetails = async (id, type = "movie") => {
+  try {
+    const res = await api.get(`/${type}/${id}`, { timeout: 8000 });
+    return res.data;
+  } catch (error) {
+    console.error("Details Error:", error);
+    return null;
+  }
+};
+
+/* =========================
+   VIDEOS (TRAILERS)
+========================= */
+export const getVideos = async (id, type = "movie") => {
+  try {
+    const res = await api.get(`/${type}/${id}/videos`, {
+      timeout: 8000,
+    });
+    return res.data?.results || [];
+  } catch (error) {
+    console.error("Video Error:", error);
+    return [];
+  }
+};
+
+/* =========================
+   SEARCH (DEBOUNCE SAFE)
+========================= */
+export const searchContent = async (type = "movie", query) => {
+  if (!query || query.trim() === "") return [];
+
+  try {
+    const endpoint = type === "anime" ? "/search/tv" : `/search/${type}`;
+
+    const res = await api.get(endpoint, {
+      params: { query },
+      timeout: 8000,
+    });
+
+    return res.data?.results || [];
+  } catch (error) {
+    console.error("Search Error:", error);
+    return [];
+  }
+};
