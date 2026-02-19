@@ -68,16 +68,16 @@ CINEVERSE/
 ## 📸 App Preview – CineVerse UI
 
 ### 🎬 Home Page (Cinematic Landing UI)
-![Home Page](./public/screenshots/Home.png)
-
+![Home Page](./Client/public/screenshots/Home.png)
+<!-- 
 ### 🍿 Movie Rows & Category Pills (Netflix-Style Scroll)
-![Movies Section](./public/screenshots/movies.png)
+![Movies Section](./public/screenshots/movies.png) -->
 
 ### 🎥 Movie Details Page
-![Movie Details](./public/screenshots/Details.png)
+![Movie Details](./Client/public/screenshots/Details.png)
 
-### 🧭 Sidebar & Navigation Layout
-![Sidebar](./public/screenshots/sidebar.png)
+<!-- ### 🧭 Sidebar & Navigation Layout
+![Sidebar](./public/screenshots/sidebar.png) -->
 
 ---
 
