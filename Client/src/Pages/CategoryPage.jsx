@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import MovieRow from "../components/MovieRow";
 import BannerCarousel from "../components/BannerCarousel";
 import SkeletonCardLoader from "../components/SkeletonCardLoader";
+
 import {
   getTrending,
   getMoviesByRegion,
@@ -10,10 +11,13 @@ import {
   searchContent,
   getTopRated,
   getPopular,
+  getTopRatedByRegion
 } from "../services/tmdb";
+
 import { useContent } from "../context/ContentContext";
 
-// 🎬 Category Config Map (unchanged but optimized usage)
+/* CATEGORY CONFIG */
+
 const categoryMap = {
   hollywood: { region: "US", title: "Hollywood" },
   bollywood: { language: "hi", title: "Bollywood" },
@@ -39,12 +43,17 @@ const CategoryPage = () => {
   const loadCategoryData = useCallback(async () => {
     if (!config) return;
 
+    let active = true;
+
     try {
       setLoading(true);
 
-      // 🔍 SEARCH MODE (Priority)
+      /* SEARCH MODE */
       if (searchQuery && searchQuery.trim() !== "") {
         const results = await searchContent(contentType, searchQuery);
+
+        if (!active) return;
+
         setMovies(results);
         setBanner([]);
         setTopRated([]);
@@ -55,34 +64,57 @@ const CategoryPage = () => {
       let results = [];
       let baseType = "movie";
 
-      // 🎯 FAST CATEGORY LOGIC (no axios direct calls)
+      /* MAIN CATEGORY CONTENT */
+
       if (config.custom === "hindi-dubbed") {
         results = await getHindiDubbed();
-      } else if (config.type === "tv") {
+      }
+      else if (config.type === "tv") {
         results = await getTrending("tv");
         baseType = "tv";
-      } else if (config.language) {
+      }
+      else if (config.language) {
         results = await getMoviesByRegion("movie", null, config.language);
-      } else if (config.region) {
+      }
+      else if (config.region) {
         results = await getMoviesByRegion("movie", config.region, null);
       }
 
-      // 🎞 Main content first (improves LCP)
+      if (!active) return;
+
+      /* MAIN CONTENT FIRST */
+
       setMovies(results);
       setBanner(results.slice(0, 5));
 
-      // ⭐ Load extra sections AFTER main content (performance boost)
-      setTimeout(async () => {
-        const [top, popular] = await Promise.all([
-          getTopRated(baseType),
-          getPopular(baseType),
-        ]);
+      /* PARALLEL LOADING */
 
-        setTopRated(top.slice(0, 15));
-        setRecommended(popular.slice(0, 15));
-      }, 700); // defer heavy sections
+      let topPromise;
+      let recommendedPromise;
+
+      if (config.language) {
+        topPromise = getTopRatedByRegion("movie", null, config.language);
+        recommendedPromise = getMoviesByRegion("movie", null, config.language);
+      }
+      else if (config.region) {
+        topPromise = getTopRatedByRegion("movie", config.region, null);
+        recommendedPromise = getMoviesByRegion("movie", config.region, null);
+      }
+      else {
+        topPromise = getTopRated(baseType);
+        recommendedPromise = getPopular(baseType);
+      }
+
+      const [top, popular] = await Promise.all([topPromise, recommendedPromise]);
+
+      if (!active) return;
+
+      setTopRated(top.slice(0, 15));
+      setRecommended(popular.slice(0, 15));
+
     } catch (err) {
       console.error("Category Load Error:", err);
+
       setMovies([]);
       setBanner([]);
       setTopRated([]);
@@ -90,9 +122,16 @@ const CategoryPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [config, contentType, searchQuery]);
+
+    return () => {
+      active = false;
+    };
+
+  }, [type, contentType, searchQuery]);
 
   useEffect(() => {
+    setTopRated([]);
+    setRecommended([]);
     loadCategoryData();
   }, [loadCategoryData]);
 
@@ -102,12 +141,12 @@ const CategoryPage = () => {
 
   return (
     <>
-      {/* 🎞 BANNER (Hidden During Search) */}
+      {/* Banner */}
       {!searchQuery && banner.length > 0 && (
         <BannerCarousel movies={banner} />
       )}
 
-      {/* 🎬 MAIN CATEGORY ROW */}
+      {/* Main Row */}
       {loading ? (
         <SkeletonCardLoader count={8} />
       ) : movies.length > 0 ? (
@@ -119,7 +158,7 @@ const CategoryPage = () => {
         <p className="text-white px-6 mt-6">No results found</p>
       )}
 
-      {/* ⭐ TOP RATED (Lazy Loaded for Performance) */}
+      {/* Top Rated */}
       {!searchQuery && topRated.length > 0 && (
         <MovieRow
           title={`${config.title} Top Rated`}
@@ -127,7 +166,7 @@ const CategoryPage = () => {
         />
       )}
 
-      {/* 🎬 RECOMMENDED (Lazy Loaded) */}
+      {/* Recommended */}
       {!searchQuery && recommended.length > 0 && (
         <MovieRow
           title={`Recommended ${config.title}`}

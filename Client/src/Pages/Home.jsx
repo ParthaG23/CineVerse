@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
+import { motion } from "framer-motion";
+
 import {
   getTrending,
   getMoviesByGenre,
@@ -13,7 +15,6 @@ import MovieRow from "../components/MovieRow";
 import CategoryPills from "../components/CategoryPills";
 import SkeletonCardLoader from "../components/SkeletonCardLoader";
 
-
 const genreMap = {
   Trending: null,
   Action: 28,
@@ -23,6 +24,15 @@ const genreMap = {
   Drama: 18,
   Fantasy: 14,
   Horror: 27,
+};
+
+const containerVariant = {
+  hidden: { opacity: 0, y: 30 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5, ease: "easeOut" },
+  },
 };
 
 const Home = () => {
@@ -35,7 +45,6 @@ const Home = () => {
   const [activeCategory, setActiveCategory] = useState("Trending");
   const [loading, setLoading] = useState(true);
 
-  // 🎬 OPTIMIZED: Category Loader (NO extra re-renders)
   const loadCategoryMovies = useCallback(async (category, type) => {
     try {
       setLoading(true);
@@ -48,7 +57,7 @@ const Home = () => {
       } else {
         const genreId = genreMap[category];
         results = await getMoviesByGenre(type, genreId);
-        setBannerMovies([]); // hide banner on genre
+        setBannerMovies([]);
       }
 
       setMovies(results);
@@ -61,94 +70,129 @@ const Home = () => {
     }
   }, []);
 
-  // ⭐ OPTIMIZED: Load extra sections AFTER main content (improves LCP)
   const loadExtraSections = useCallback(async (type) => {
     try {
-      // Delay non-critical content (BIG Lighthouse boost)
-      setTimeout(async () => {
-        const [top, popular] = await Promise.all([
-          getTopRated(type),
-          getPopular(type),
-        ]);
+      const [top, popular] = await Promise.all([
+        getTopRated(type),
+        getPopular(type),
+      ]);
 
-        setTopMovies(top);
-        setRecommended(popular);
-      }, 800); // defer heavy sections
+      setTopMovies(top);
+      setRecommended(popular);
     } catch (err) {
       console.error("Extra Sections Error:", err);
     }
   }, []);
 
-  // 🔍 MAIN DATA CONTROLLER (Optimized)
+  // 🔍 Search
   useEffect(() => {
-    let isMounted = true;
+    const searchMovies = async () => {
+      if (!searchQuery || searchQuery.trim() === "") return;
 
-    const loadData = async () => {
-      // SEARCH MODE (highest priority)
-      if (searchQuery && searchQuery.trim() !== "") {
-        try {
-          setLoading(true);
-          const results = await searchContent(contentType, searchQuery);
+      try {
+        setLoading(true);
+        const results = await searchContent(contentType, searchQuery);
 
-          if (!isMounted) return;
-          setMovies(results);
-          setBannerMovies([]);
-        } catch (err) {
-          console.error("Search Error:", err);
-          if (isMounted) setMovies([]);
-        } finally {
-          if (isMounted) setLoading(false);
-        }
-        return;
+        setMovies(results);
+        setBannerMovies([]);
+      } catch (err) {
+        console.error("Search Error:", err);
+        setMovies([]);
+      } finally {
+        setLoading(false);
       }
-
-      // NORMAL MODE (faster)
-      await loadCategoryMovies(activeCategory, contentType);
-      loadExtraSections(contentType); // load secondary sections lazily
     };
 
-    loadData();
+    searchMovies();
+  }, [searchQuery, contentType]);
 
-    return () => {
-      isMounted = false; // prevent memory leaks & extra renders
-    };
-  }, [contentType, activeCategory, searchQuery, loadCategoryMovies, loadExtraSections]);
+  // 🎬 Category loader
+  useEffect(() => {
+    if (searchQuery) return;
+
+    loadCategoryMovies(activeCategory, contentType);
+  }, [activeCategory, contentType, searchQuery, loadCategoryMovies]);
+
+  // ⭐ Extra sections
+  useEffect(() => {
+    if (searchQuery) return;
+
+    setTopMovies([]);
+    setRecommended([]);
+
+    loadExtraSections(contentType);
+  }, [contentType, searchQuery, loadExtraSections]);
 
   return (
     <>
-      {/* 🎬 BANNER (Critical Content First) */}
+      {/* Banner */}
       {!searchQuery && bannerMovies.length > 0 && (
-        <BannerCarousel movies={bannerMovies} />
+        <motion.div
+          variants={containerVariant}
+          initial="hidden"
+          animate="visible"
+        >
+          <BannerCarousel movies={bannerMovies} />
+        </motion.div>
       )}
 
-      {/* 🏷️ CATEGORY PILLS */}
+      {/* Category Pills */}
       {!searchQuery && (
-        <div className="px-4 lg:px-6 mt-4">
+        <motion.div
+          className="px-4 lg:px-6 mt-4"
+          variants={containerVariant}
+          initial="hidden"
+          animate="visible"
+        >
           <CategoryPills
             active={activeCategory}
             onChange={setActiveCategory}
           />
-        </div>
+        </motion.div>
       )}
 
-      {/* 🎥 MAIN MOVIES (Priority Section) */}
+      {/* Main Movies */}
       {loading ? (
         <div className="px-6 mt-6 text-white animate-pulse">
-          <SkeletonCardLoader/>
+          <SkeletonCardLoader />
         </div>
       ) : movies.length > 0 ? (
-        <MovieRow movies={movies} />
+        <motion.div
+          className="px-6"
+          variants={containerVariant}
+          initial="hidden"
+          animate="visible"
+        >
+          <MovieRow movies={movies} />
+        </motion.div>
       ) : (
         <p className="text-white px-6 mt-6">No results found</p>
       )}
 
-      {/* ⭐ NON-CRITICAL SECTIONS (Lazy Loaded) */}
+      {/* Top Rated */}
       {!searchQuery && topMovies.length > 0 && (
-        <MovieRow title="Top Rated" movies={topMovies} />
+        <motion.div
+          className="px-6"
+          variants={containerVariant}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+        >
+          <MovieRow title="Top Rated" movies={topMovies} />
+        </motion.div>
       )}
 
+      {/* Recommended */}
       {!searchQuery && recommended.length > 0 && (
-        <MovieRow title="Recommended For You" movies={recommended} />
+        <motion.div
+          className="px-6"
+          variants={containerVariant}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+        >
+          <MovieRow title="Recommended For You" movies={recommended} />
+        </motion.div>
       )}
     </>
   );

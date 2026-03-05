@@ -18,7 +18,7 @@ const Sidebar = () => {
   const { sidebarOpen, setSidebarOpen } = useUI();
   const location = useLocation();
 
-  // 🧠 Memoized user (prevents unnecessary JSON parsing)
+  /* USER MEMO (avoid repeated JSON parsing) */
   const user = useMemo(() => {
     try {
       return JSON.parse(localStorage.getItem("user"));
@@ -27,7 +27,7 @@ const Sidebar = () => {
     }
   }, []);
 
-  // 🎬 Memoized menu items (performance boost)
+  /* MAIN MENU ITEMS */
   const menuItems = useMemo(
     () => [
       { name: "Home", icon: <FiHome />, path: "/" },
@@ -42,6 +42,7 @@ const Sidebar = () => {
     []
   );
 
+  /* BOTTOM MENU */
   const bottomItems = useMemo(
     () => [
       { name: "Settings", icon: <FiSettings />, path: "/settings" },
@@ -50,20 +51,25 @@ const Sidebar = () => {
     []
   );
 
-  // 🎯 Better active route match (supports nested routes)
-  const isActive = (path) => location.pathname.startsWith(path);
+  /* ACTIVE ROUTE FIX */
+  const isActive = (path) => {
+    if (path === "/") {
+      return location.pathname === "/";
+    }
+    return location.pathname.startsWith(path);
+  };
 
   return (
     <>
-      {/* 📱 MOBILE OVERLAY (GPU optimized) */}
+      {/* MOBILE OVERLAY */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 lg:hidden bg-black/60 backdrop-blur-sm will-change-opacity"
+          className="fixed inset-0 z-40 lg:hidden bg-black/60 backdrop-blur-sm"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* 🧭 SIDEBAR */}
+      {/* SIDEBAR */}
       <aside
         className={`
           fixed top-0 left-0 z-50
@@ -74,16 +80,14 @@ const Sidebar = () => {
           backdrop-blur-xl
           border-r border-white/5
           transition-transform duration-300 ease-out
-          will-change-transform
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0
         `}
       >
-        {/* 🔝 HEADER / LOGO */}
+        {/* HEADER */}
         <div className="flex items-center justify-between mb-8">
           <Logo />
 
-          {/* ❌ CLOSE BUTTON (MOBILE) */}
           <button
             className="lg:hidden text-white hover:text-yellow-400 transition"
             onClick={() => setSidebarOpen(false)}
@@ -93,8 +97,9 @@ const Sidebar = () => {
           </button>
         </div>
 
-        {/* 📜 SCROLLABLE MENU (Fix for small screens) */}
+        {/* SCROLLABLE AREA */}
         <div className="flex-1 overflow-y-auto no-scrollbar pr-1">
+
           {/* MAIN MENU */}
           <nav className="flex flex-col gap-2 text-sm">
             {menuItems.map((item) => {
@@ -106,11 +111,11 @@ const Sidebar = () => {
                   to={item.path}
                   onClick={() => setSidebarOpen(false)}
                   className={`
-                    flex items-center gap-3 px-4 py-3 rounded-xl
-                    transition-all duration-200
+                    relative flex items-center gap-3 px-4 py-3 rounded-xl
+                    transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]
                     ${
                       active
-                        ? "bg-white/10 text-white shadow-md"
+                        ? "bg-white/10 text-white shadow-lg before:absolute before:left-0 before:top-2 before:h-6 before:w-1 before:bg-yellow-400 before:rounded-r"
                         : "text-white/70 hover:bg-white/5 hover:text-white"
                     }
                   `}
@@ -122,7 +127,7 @@ const Sidebar = () => {
             })}
           </nav>
 
-          {/* 🔽 BOTTOM NAV */}
+          {/* BOTTOM MENU */}
           <div className="pt-6 mt-6 border-t border-white/10">
             <nav className="flex flex-col gap-2 text-sm mb-4">
               {bottomItems.map((item) => {
@@ -133,11 +138,11 @@ const Sidebar = () => {
                     key={item.name}
                     to={item.path}
                     className={`
-                      flex items-center gap-3 px-4 py-3 rounded-xl
-                      transition-all duration-200
+                      relative flex items-center gap-3 px-4 py-3 rounded-xl
+                      transition-all duration-200 hover:scale-[1.02]
                       ${
                         active
-                          ? "bg-white/10 text-white"
+                          ? "bg-white/10 text-white shadow-lg before:absolute before:left-0 before:top-2 before:h-6 before:w-1 before:bg-yellow-400 before:rounded-r"
                           : "text-white/70 hover:bg-white/5 hover:text-white"
                       }
                     `}
@@ -149,7 +154,7 @@ const Sidebar = () => {
               })}
             </nav>
 
-            {/* 👤 USER / LOGIN CARD */}
+            {/* USER / LOGIN CARD */}
             {user ? (
               <div className="flex items-center gap-3 bg-white/5 rounded-xl p-3">
                 <div className="w-9 h-9 rounded-full bg-slate-700 flex items-center justify-center text-white font-semibold">
@@ -182,5 +187,4 @@ const Sidebar = () => {
   );
 };
 
-// 🚀 Prevent unnecessary re-renders (VERY important for Layout)
 export default memo(Sidebar);

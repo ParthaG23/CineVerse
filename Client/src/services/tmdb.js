@@ -1,38 +1,58 @@
 import api from "./api";
 
 /* =========================
-   SIMPLE IN-MEMORY CACHE
+   SMART CACHE + REQUEST DEDUPLICATION
 ========================= */
+
 const cache = new Map();
+const pendingRequests = new Map();
 const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
 
 const fetchWithCache = async (key, requestFn) => {
   const now = Date.now();
 
+  // Return cached data
   if (cache.has(key)) {
     const { data, expiry } = cache.get(key);
+
     if (now < expiry) return data;
+
+    // Remove expired cache
+    cache.delete(key);
   }
 
-  try {
-    const res = await requestFn();
-    const results = res?.data?.results || [];
+  // Prevent duplicate requests
+  if (pendingRequests.has(key)) {
+    return pendingRequests.get(key);
+  }
 
-    cache.set(key, {
-      data: results,
-      expiry: now + CACHE_TTL,
+  const requestPromise = requestFn()
+    .then((res) => {
+      const results = res?.data?.results || [];
+
+      cache.set(key, {
+        data: results,
+        expiry: now + CACHE_TTL,
+      });
+
+      pendingRequests.delete(key);
+      return results;
+    })
+    .catch((error) => {
+      console.error("TMDB Error:", error?.response?.data || error.message);
+      pendingRequests.delete(key);
+      return [];
     });
 
-    return results;
-  } catch (error) {
-    console.error("TMDB Error:", error?.response?.data || error.message);
-    return [];
-  }
+  pendingRequests.set(key, requestPromise);
+
+  return requestPromise;
 };
 
 /* =========================
-   TRENDING (FAST + CACHED)
+   TRENDING
 ========================= */
+
 export const getTrending = (type = "movie") => {
   const key = `trending-${type}`;
 
@@ -54,8 +74,9 @@ export const getTrending = (type = "movie") => {
 };
 
 /* =========================
-   GENRE FILTER (OPTIMIZED)
+   GENRE FILTER
 ========================= */
+
 export const getMoviesByGenre = (type = "movie", genreId) => {
   const key = `genre-${type}-${genreId}`;
 
@@ -83,22 +104,11 @@ export const getMoviesByGenre = (type = "movie", genreId) => {
 };
 
 /* =========================
-   POPULAR (CACHED)
+   POPULAR
 ========================= */
+
 export const getPopular = (type = "movie") => {
   const key = `popular-${type}`;
-
-  if (type === "anime") {
-    return fetchWithCache(key, () =>
-      api.get("/discover/tv", {
-        params: {
-          with_genres: 16,
-          sort_by: "popularity.desc",
-        },
-        timeout: 8000,
-      })
-    );
-  }
 
   return fetchWithCache(key, () =>
     api.get(`/${type}/popular`, { timeout: 8000 })
@@ -106,26 +116,21 @@ export const getPopular = (type = "movie") => {
 };
 
 /* =========================
-   TOP RATED (OPTIMIZED)
+   TOP RATED (OFFICIAL ENDPOINT)
 ========================= */
+
 export const getTopRated = (type = "movie") => {
   const key = `top-rated-${type}`;
 
   return fetchWithCache(key, () =>
-    api.get(`/discover/${type}`, {
-      params: {
-        sort_by: "vote_average.desc",
-        "vote_count.gte": 500,
-        include_adult: false,
-      },
-      timeout: 8000,
-    })
+    api.get(`/${type}/top_rated`, { timeout: 8000 })
   );
 };
 
 /* =========================
-   DETAILS (NO CACHE - REALTIME)
+   DETAILS
 ========================= */
+
 export const getDetails = async (id, type = "movie") => {
   try {
     const res = await api.get(`/${type}/${id}`, { timeout: 8000 });
@@ -137,13 +142,12 @@ export const getDetails = async (id, type = "movie") => {
 };
 
 /* =========================
-   VIDEOS (TRAILERS)
+   VIDEOS
 ========================= */
+
 export const getVideos = async (id, type = "movie") => {
   try {
-    const res = await api.get(`/${type}/${id}/videos`, {
-      timeout: 8000,
-    });
+    const res = await api.get(`/${type}/${id}/videos`, { timeout: 8000 });
     return res.data?.results || [];
   } catch (error) {
     console.error("Video Error:", error);
@@ -152,8 +156,9 @@ export const getVideos = async (id, type = "movie") => {
 };
 
 /* =========================
-   SEARCH (DEBOUNCE SAFE)
+   SEARCH
 ========================= */
+
 export const searchContent = async (type = "movie", query) => {
   if (!query || query.trim() === "") return [];
 
@@ -173,14 +178,13 @@ export const searchContent = async (type = "movie", query) => {
 };
 
 /* =========================
-   MOVIE CREDITS (CAST & CREW)
+   MOVIE CREDITS
 ========================= */
+
 export const getMovieCredits = async (id, type = "movie") => {
   try {
-    const res = await api.get(`/${type}/${id}/credits`, {
-      timeout: 8000,
-    });
-    return res.data; // important for MovieDetails
+    const res = await api.get(`/${type}/${id}/credits`, { timeout: 8000 });
+    return res.data;
   } catch (error) {
     console.error("Credits Error:", error);
     return { cast: [], crew: [] };
@@ -188,29 +192,9 @@ export const getMovieCredits = async (id, type = "movie") => {
 };
 
 /* =========================
-   HINDI DUBBED MOVIES
+   REGION MOVIES
 ========================= */
-export const getHindiDubbed = async () => {
-  try {
-    const res = await api.get("/discover/movie", {
-      params: {
-        sort_by: "popularity.desc",
-        include_adult: false,
-        language: "hi-IN",
-        with_original_language: "en", // safer than pipe syntax
-      },
-      timeout: 8000,
-    });
 
-    return res.data?.results || [];
-  } catch (error) {
-    console.error("Hindi Dubbed Error:", error);
-    return [];
-  }
-};
-/* =========================
-   MOVIES BY REGION
-========================= */
 export const getMoviesByRegion = async (
   type = "movie",
   region = null,
@@ -234,4 +218,41 @@ export const getMoviesByRegion = async (
   }
 };
 
+export const getHindiDubbed = () => {
+  const key = `hindi-dubbed`;
 
+  return fetchWithCache(key, () =>
+    api.get("/discover/movie", {
+      params: {
+        sort_by: "popularity.desc",
+        include_adult: false,
+        with_original_language: "en",
+        language: "hi-IN",
+      },
+      timeout: 8000,
+    })
+  );
+};
+export const getTopRatedByRegion = async (
+  type = "movie",
+  region = null,
+  language = null
+) => {
+  try {
+    const res = await api.get(`/discover/${type}`, {
+      params: {
+        sort_by: "vote_average.desc",
+        "vote_count.gte": 200,
+        include_adult: false,
+        region: region || undefined,
+        with_original_language: language || undefined,
+      },
+      timeout: 8000,
+    });
+
+    return res.data?.results || [];
+  } catch (error) {
+    console.error("Top Rated Region Error:", error);
+    return [];
+  }
+};
