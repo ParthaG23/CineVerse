@@ -8,12 +8,15 @@ import {
   getTopRated,
   getPopular,
 } from "../services/tmdb";
+
 import { useContent } from "../context/ContentContext";
 
 import BannerCarousel from "../components/BannerCarousel";
 import MovieRow from "../components/MovieRow";
 import CategoryPills from "../components/CategoryPills";
 import SkeletonCardLoader from "../components/SkeletonCardLoader";
+
+/* GENRE MAP */
 
 const genreMap = {
   Trending: null,
@@ -26,12 +29,14 @@ const genreMap = {
   Horror: 27,
 };
 
+/* ANIMATION */
+
 const containerVariant = {
   hidden: { opacity: 0, y: 30 },
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.5, ease: "easeOut" },
+    transition: { duration: 0.45, ease: "easeOut" },
   },
 };
 
@@ -45,7 +50,9 @@ const Home = () => {
   const [activeCategory, setActiveCategory] = useState("Trending");
   const [loading, setLoading] = useState(true);
 
-  const loadCategoryMovies = useCallback(async (category, type) => {
+  /* CATEGORY LOADER */
+
+  const loadCategoryMovies = useCallback(async (category, type, cancelled) => {
     try {
       setLoading(true);
 
@@ -53,85 +60,128 @@ const Home = () => {
 
       if (category === "Trending") {
         results = await getTrending(type);
-        setBannerMovies(results.slice(0, 5));
+        if (!cancelled.current) {
+          setBannerMovies(results.slice(0, 5));
+        }
       } else {
         const genreId = genreMap[category];
         results = await getMoviesByGenre(type, genreId);
+
+        if (!cancelled.current) {
+          setBannerMovies([]);
+        }
+      }
+
+      if (!cancelled.current) {
+        setMovies(results);
+      }
+
+    } catch (err) {
+      console.error("Category Error:", err);
+
+      if (!cancelled.current) {
+        setMovies([]);
         setBannerMovies([]);
       }
 
-      setMovies(results);
-    } catch (err) {
-      console.error("Category Error:", err);
-      setMovies([]);
-      setBannerMovies([]);
     } finally {
-      setLoading(false);
+      if (!cancelled.current) setLoading(false);
     }
   }, []);
 
-  const loadExtraSections = useCallback(async (type) => {
+  /* EXTRA SECTIONS */
+
+  const loadExtraSections = useCallback(async (type, cancelled) => {
     try {
       const [top, popular] = await Promise.all([
         getTopRated(type),
         getPopular(type),
       ]);
 
-      setTopMovies(top);
-      setRecommended(popular);
+      if (!cancelled.current) {
+        setTopMovies(top);
+        setRecommended(popular);
+      }
+
     } catch (err) {
       console.error("Extra Sections Error:", err);
     }
   }, []);
 
-  // 🔍 Search
-  useEffect(() => {
-    const searchMovies = async () => {
-      if (!searchQuery || searchQuery.trim() === "") return;
+  /* SEARCH MODE */
 
+  useEffect(() => {
+    if (!searchQuery?.trim()) return;
+
+    const cancelled = { current: false };
+
+    const searchMovies = async () => {
       try {
         setLoading(true);
+
         const results = await searchContent(contentType, searchQuery);
 
-        setMovies(results);
-        setBannerMovies([]);
+        if (!cancelled.current) {
+          setMovies(results);
+          setBannerMovies([]);
+        }
+
       } catch (err) {
         console.error("Search Error:", err);
-        setMovies([]);
+
+        if (!cancelled.current) setMovies([]);
+
       } finally {
-        setLoading(false);
+        if (!cancelled.current) setLoading(false);
       }
     };
 
     searchMovies();
+
+    return () => {
+      cancelled.current = true;
+    };
+
   }, [searchQuery, contentType]);
 
-  // 🎬 Category loader
+  /* CATEGORY LOADING */
+
   useEffect(() => {
     if (searchQuery) return;
 
-    loadCategoryMovies(activeCategory, contentType);
+    const cancelled = { current: false };
+
+    loadCategoryMovies(activeCategory, contentType, cancelled);
+
+    return () => {
+      cancelled.current = true;
+    };
+
   }, [activeCategory, contentType, searchQuery, loadCategoryMovies]);
 
-  // ⭐ Extra sections
+  /* EXTRA SECTIONS */
+
   useEffect(() => {
     if (searchQuery) return;
+
+    const cancelled = { current: false };
 
     setTopMovies([]);
     setRecommended([]);
 
-    loadExtraSections(contentType);
+    loadExtraSections(contentType, cancelled);
+
+    return () => {
+      cancelled.current = true;
+    };
+
   }, [contentType, searchQuery, loadExtraSections]);
 
   return (
     <>
       {/* Banner */}
       {!searchQuery && bannerMovies.length > 0 && (
-        <motion.div
-          variants={containerVariant}
-          initial="hidden"
-          animate="visible"
-        >
+        <motion.div variants={containerVariant} initial="hidden" animate="visible">
           <BannerCarousel movies={bannerMovies} />
         </motion.div>
       )}
@@ -153,7 +203,7 @@ const Home = () => {
 
       {/* Main Movies */}
       {loading ? (
-        <div className="px-6 mt-6 text-white animate-pulse">
+        <div className="px-6 mt-6 text-white">
           <SkeletonCardLoader />
         </div>
       ) : movies.length > 0 ? (

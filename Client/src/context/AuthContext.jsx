@@ -8,27 +8,38 @@ import {
 } from "react";
 
 const AuthContext = createContext(null);
+const STORAGE_KEY = "user";
+
+/* SAFE JSON PARSE */
+const safeParse = (value) => {
+  try {
+    return value ? JSON.parse(value) : null;
+  } catch {
+    return null;
+  }
+};
 
 export const AuthProvider = ({ children }) => {
-  // 🔥 Lazy initialization (faster than useEffect load)
+  /* LAZY INIT USER */
   const [user, setUser] = useState(() => {
     try {
-      const storedUser = localStorage.getItem("user");
-      return storedUser ? JSON.parse(storedUser) : null;
-    } catch (err) {
-      console.error("Auth parse error:", err);
+      const stored = localStorage.getItem(STORAGE_KEY);
+      return safeParse(stored);
+    } catch {
       return null;
     }
   });
 
   const [loading, setLoading] = useState(false);
 
-  // 🚀 Optimized login (memoized)
+  /* LOGIN */
   const login = useCallback((userData) => {
     try {
       setLoading(true);
       setUser(userData);
-      localStorage.setItem("user", JSON.stringify(userData));
+
+      const serialized = JSON.stringify(userData);
+      localStorage.setItem(STORAGE_KEY, serialized);
     } catch (err) {
       console.error("Login error:", err);
     } finally {
@@ -36,59 +47,49 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // 🚀 Optimized logout (clears storage + state)
+  /* LOGOUT */
   const logout = useCallback(() => {
     try {
       setUser(null);
-      localStorage.removeItem("user");
+      localStorage.removeItem(STORAGE_KEY);
     } catch (err) {
       console.error("Logout error:", err);
     }
   }, []);
 
-  // 🔄 Sync user across tabs (PRO feature)
+  /* SYNC AUTH ACROSS TABS */
   useEffect(() => {
-    const syncAuth = (e) => {
-      if (e.key === "user") {
-        try {
-          const updatedUser = e.newValue
-            ? JSON.parse(e.newValue)
-            : null;
-          setUser(updatedUser);
-        } catch {
-          setUser(null);
-        }
-      }
+    const handleStorage = (e) => {
+      if (e.key !== STORAGE_KEY) return;
+      setUser(safeParse(e.newValue));
     };
 
-    window.addEventListener("storage", syncAuth);
-    return () => window.removeEventListener("storage", syncAuth);
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
-  // 🧠 Memoized context value (CRITICAL for performance)
+  /* MEMOIZED CONTEXT VALUE */
   const value = useMemo(
     () => ({
       user,
+      loading,
       login,
       logout,
-      loading,
-      isAuthenticated: !!user,
+      isAuthenticated: Boolean(user),
     }),
-    [user, login, logout, loading]
+    [user, loading, login, logout]
   );
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-// 🔒 Safe hook with error handling
+/* SAFE HOOK */
 export const useAuth = () => {
   const context = useContext(AuthContext);
+
   if (!context) {
     throw new Error("useAuth must be used within AuthProvider");
   }
+
   return context;
 };

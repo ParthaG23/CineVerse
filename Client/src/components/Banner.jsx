@@ -1,17 +1,19 @@
 import { useNavigate } from "react-router-dom";
 import { FiPlay, FiHeart, FiMoreHorizontal } from "react-icons/fi";
-import { useState, useMemo } from "react";
+import { useState, useMemo, memo } from "react";
 import { getVideos } from "../services/tmdb";
 import { useContent } from "../context/ContentContext";
 
-// 🔥 Dynamic image size (CRITICAL FIX)
-const getBackdropUrl = (path) => {
-  if (!path) return "";
+/* IMAGE URL HELPER */
+const IMAGE_BASE = "https://image.tmdb.org/t/p";
 
-  const isMobile = window.innerWidth < 640;
-  const size = isMobile ? "w780" : "w1280"; // instead of original (huge)
+const getBackdropUrls = (path) => {
+  if (!path) return {};
 
-  return `https://image.tmdb.org/t/p/${size}${path}`;
+  return {
+    small: `${IMAGE_BASE}/w780${path}`,
+    large: `${IMAGE_BASE}/w1280${path}`,
+  };
 };
 
 const Banner = ({ movie }) => {
@@ -19,10 +21,10 @@ const Banner = ({ movie }) => {
   const { contentType } = useContent();
   const [loadingTrailer, setLoadingTrailer] = useState(false);
 
-  // ✅ Memoized backdrop (prevents re-renders)
+  /* MEMOIZED IMAGE URLS */
   const backdrop = useMemo(
-    () => getBackdropUrl(movie?.backdrop_path),
-    [movie]
+    () => getBackdropUrls(movie?.backdrop_path),
+    [movie?.backdrop_path]
   );
 
   const handleTrailer = async () => {
@@ -32,6 +34,7 @@ const Banner = ({ movie }) => {
       setLoadingTrailer(true);
 
       const results = await getVideos(movie.id, contentType);
+
       const trailer = results?.find(
         (vid) => vid.type === "Trailer" && vid.site === "YouTube"
       );
@@ -52,26 +55,29 @@ const Banner = ({ movie }) => {
     <div className="px-4 lg:px-6 mt-2 lg:mt-4">
       <div
         className="
-          relative 
+          relative
           w-full max-w-6xl mx-auto
           h-[200px] sm:h-[240px] lg:h-[360px]
           rounded-3xl overflow-hidden
           bg-black/20
         "
       >
-        {/* 🔥 Optimized Backdrop Image */}
+        {/* HERO IMAGE (LCP optimized) */}
         <img
-          src={backdrop}
+          src={backdrop.large}
+          srcSet={`${backdrop.small} 780w, ${backdrop.large} 1280w`}
+          sizes="(max-width: 640px) 780px, 1280px"
           alt={movie.title || movie.name}
-          loading="eager"        // LCP optimization (hero section)
-          fetchPriority="high"   // improves Lighthouse LCP
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
           className="absolute inset-0 w-full h-full object-cover"
         />
 
-        {/* DARK GRADIENT */}
+        {/* PREMIUM GRADIENT */}
         <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/50 to-transparent" />
 
-        {/* DOTS */}
+        {/* MENU DOTS */}
         <FiMoreHorizontal
           className="absolute top-4 right-4 text-white/70"
           size={22}
@@ -79,7 +85,7 @@ const Banner = ({ movie }) => {
 
         {/* CONTENT */}
         <div className="relative z-10 h-full flex flex-col justify-end p-5 lg:p-10 max-w-xl">
-          <h2 className="text-white text-xl lg:text-3xl font-bold mb-2">
+          <h2 className="text-white text-xl lg:text-3xl font-bold mb-2 line-clamp-1">
             {movie.title || movie.name}
           </h2>
 
@@ -88,7 +94,7 @@ const Banner = ({ movie }) => {
           </p>
 
           <div className="flex items-center gap-4">
-            {/* 🚀 Optimized Trailer Button */}
+            {/* TRAILER BUTTON */}
             <button
               onClick={handleTrailer}
               disabled={loadingTrailer}
@@ -105,12 +111,14 @@ const Banner = ({ movie }) => {
               {loadingTrailer ? "Loading..." : "Play trailer"}
             </button>
 
+            {/* FAVORITE BUTTON */}
             <button
               className="
                 w-10 h-10 rounded-full
                 bg-black/40 backdrop-blur-md
                 flex items-center justify-center
                 text-white hover:bg-black/60
+                transition
               "
             >
               <FiHeart size={18} />
@@ -122,4 +130,4 @@ const Banner = ({ movie }) => {
   );
 };
 
-export default Banner;
+export default memo(Banner);

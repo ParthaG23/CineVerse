@@ -1,23 +1,29 @@
 import api from "./api";
 
 /* =========================
-   SMART CACHE + REQUEST DEDUPLICATION
+   CONFIG
 ========================= */
 
 const cache = new Map();
 const pendingRequests = new Map();
 const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
+const REQUEST_TIMEOUT = 8000;
+
+/* =========================
+   CACHE + REQUEST DEDUP
+========================= */
 
 const fetchWithCache = async (key, requestFn) => {
   const now = Date.now();
 
-  // Return cached data
+  // Cached result
   if (cache.has(key)) {
-    const { data, expiry } = cache.get(key);
+    const cached = cache.get(key);
 
-    if (now < expiry) return data;
+    if (now < cached.expiry) {
+      return cached.data;
+    }
 
-    // Remove expired cache
     cache.delete(key);
   }
 
@@ -28,18 +34,18 @@ const fetchWithCache = async (key, requestFn) => {
 
   const requestPromise = requestFn()
     .then((res) => {
-      const results = res?.data?.results || [];
+      const results = res?.results || [];
 
       cache.set(key, {
         data: results,
-        expiry: now + CACHE_TTL,
+        expiry: Date.now() + CACHE_TTL,
       });
 
       pendingRequests.delete(key);
       return results;
     })
     .catch((error) => {
-      console.error("TMDB Error:", error?.response?.data || error.message);
+      console.error("TMDB Error:", error?.message || error);
       pendingRequests.delete(key);
       return [];
     });
@@ -63,18 +69,18 @@ export const getTrending = (type = "movie") => {
           with_genres: 16,
           sort_by: "popularity.desc",
         },
-        timeout: 8000,
+        timeout: REQUEST_TIMEOUT,
       })
     );
   }
 
   return fetchWithCache(key, () =>
-    api.get(`/trending/${type}/week`, { timeout: 8000 })
+    api.get(`/trending/${type}/week`, { timeout: REQUEST_TIMEOUT })
   );
 };
 
 /* =========================
-   GENRE FILTER
+   GENRE
 ========================= */
 
 export const getMoviesByGenre = (type = "movie", genreId) => {
@@ -87,7 +93,7 @@ export const getMoviesByGenre = (type = "movie", genreId) => {
           with_genres: 16,
           sort_by: "popularity.desc",
         },
-        timeout: 8000,
+        timeout: REQUEST_TIMEOUT,
       })
     );
   }
@@ -98,7 +104,7 @@ export const getMoviesByGenre = (type = "movie", genreId) => {
         with_genres: genreId,
         sort_by: "popularity.desc",
       },
-      timeout: 8000,
+      timeout: REQUEST_TIMEOUT,
     })
   );
 };
@@ -111,19 +117,19 @@ export const getPopular = (type = "movie") => {
   const key = `popular-${type}`;
 
   return fetchWithCache(key, () =>
-    api.get(`/${type}/popular`, { timeout: 8000 })
+    api.get(`/${type}/popular`, { timeout: REQUEST_TIMEOUT })
   );
 };
 
 /* =========================
-   TOP RATED (OFFICIAL ENDPOINT)
+   TOP RATED
 ========================= */
 
 export const getTopRated = (type = "movie") => {
   const key = `top-rated-${type}`;
 
   return fetchWithCache(key, () =>
-    api.get(`/${type}/top_rated`, { timeout: 8000 })
+    api.get(`/${type}/top_rated`, { timeout: REQUEST_TIMEOUT })
   );
 };
 
@@ -133,8 +139,9 @@ export const getTopRated = (type = "movie") => {
 
 export const getDetails = async (id, type = "movie") => {
   try {
-    const res = await api.get(`/${type}/${id}`, { timeout: 8000 });
-    return res.data;
+    return await api.get(`/${type}/${id}`, {
+      timeout: REQUEST_TIMEOUT,
+    });
   } catch (error) {
     console.error("Details Error:", error);
     return null;
@@ -147,10 +154,13 @@ export const getDetails = async (id, type = "movie") => {
 
 export const getVideos = async (id, type = "movie") => {
   try {
-    const res = await api.get(`/${type}/${id}/videos`, { timeout: 8000 });
-    return res.data?.results || [];
+    const res = await api.get(`/${type}/${id}/videos`, {
+      timeout: REQUEST_TIMEOUT,
+    });
+
+    return res?.results || [];
   } catch (error) {
-    console.error("Video Error:", error);
+    console.error("Videos Error:", error);
     return [];
   }
 };
@@ -160,17 +170,17 @@ export const getVideos = async (id, type = "movie") => {
 ========================= */
 
 export const searchContent = async (type = "movie", query) => {
-  if (!query || query.trim() === "") return [];
+  if (!query?.trim()) return [];
 
   try {
     const endpoint = type === "anime" ? "/search/tv" : `/search/${type}`;
 
     const res = await api.get(endpoint, {
       params: { query },
-      timeout: 8000,
+      timeout: REQUEST_TIMEOUT,
     });
 
-    return res.data?.results || [];
+    return res?.results || [];
   } catch (error) {
     console.error("Search Error:", error);
     return [];
@@ -178,13 +188,14 @@ export const searchContent = async (type = "movie", query) => {
 };
 
 /* =========================
-   MOVIE CREDITS
+   CREDITS
 ========================= */
 
 export const getMovieCredits = async (id, type = "movie") => {
   try {
-    const res = await api.get(`/${type}/${id}/credits`, { timeout: 8000 });
-    return res.data;
+    return await api.get(`/${type}/${id}/credits`, {
+      timeout: REQUEST_TIMEOUT,
+    });
   } catch (error) {
     console.error("Credits Error:", error);
     return { cast: [], crew: [] };
@@ -208,18 +219,22 @@ export const getMoviesByRegion = async (
         with_original_language: language || undefined,
         include_adult: false,
       },
-      timeout: 8000,
+      timeout: REQUEST_TIMEOUT,
     });
 
-    return res.data?.results || [];
+    return res?.results || [];
   } catch (error) {
     console.error("Region Movies Error:", error);
     return [];
   }
 };
 
+/* =========================
+   HINDI DUBBED
+========================= */
+
 export const getHindiDubbed = () => {
-  const key = `hindi-dubbed`;
+  const key = "hindi-dubbed";
 
   return fetchWithCache(key, () =>
     api.get("/discover/movie", {
@@ -229,10 +244,15 @@ export const getHindiDubbed = () => {
         with_original_language: "en",
         language: "hi-IN",
       },
-      timeout: 8000,
+      timeout: REQUEST_TIMEOUT,
     })
   );
 };
+
+/* =========================
+   TOP RATED REGION
+========================= */
+
 export const getTopRatedByRegion = async (
   type = "movie",
   region = null,
@@ -247,10 +267,10 @@ export const getTopRatedByRegion = async (
         region: region || undefined,
         with_original_language: language || undefined,
       },
-      timeout: 8000,
+      timeout: REQUEST_TIMEOUT,
     });
 
-    return res.data?.results || [];
+    return res?.results || [];
   } catch (error) {
     console.error("Top Rated Region Error:", error);
     return [];

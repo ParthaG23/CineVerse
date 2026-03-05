@@ -1,5 +1,38 @@
 import { useEffect, useRef, memo } from "react";
 
+/* GLOBAL SCRIPT LOADER (prevents multiple downloads) */
+let googleScriptPromise = null;
+
+const loadGoogleScript = () => {
+  if (googleScriptPromise) return googleScriptPromise;
+
+  googleScriptPromise = new Promise((resolve) => {
+    if (window.google?.accounts?.id) {
+      resolve();
+      return;
+    }
+
+    const existing = document.querySelector(
+      'script[src="https://accounts.google.com/gsi/client"]'
+    );
+
+    if (existing) {
+      existing.addEventListener("load", resolve);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = resolve;
+
+    document.body.appendChild(script);
+  });
+
+  return googleScriptPromise;
+};
+
 const GoogleLoginButton = ({ onSuccess }) => {
   const buttonRef = useRef(null);
   const initializedRef = useRef(false);
@@ -7,35 +40,18 @@ const GoogleLoginButton = ({ onSuccess }) => {
   useEffect(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-    // 🔒 Safety check for missing client ID
     if (!clientId) {
       console.error("Missing VITE_GOOGLE_CLIENT_ID in .env");
       return;
     }
 
-    // 🚀 Load Google Script if not already loaded
-    const loadGoogleScript = () => {
-      return new Promise((resolve) => {
-        if (window.google?.accounts?.id) {
-          resolve();
-          return;
-        }
-
-        const script = document.createElement("script");
-        script.src = "https://accounts.google.com/gsi/client";
-        script.async = true;
-        script.defer = true;
-        script.onload = resolve;
-        document.body.appendChild(script);
-      });
-    };
-
     const initializeGoogle = async () => {
       await loadGoogleScript();
 
-      if (!window.google || !buttonRef.current) return;
+      if (!window.google?.accounts?.id) return;
+      if (!buttonRef.current) return;
 
-      // 🧠 Prevent double initialization (IMPORTANT)
+      /* PREVENT DOUBLE INITIALIZATION */
       if (initializedRef.current) return;
       initializedRef.current = true;
 
@@ -43,9 +59,7 @@ const GoogleLoginButton = ({ onSuccess }) => {
         window.google.accounts.id.initialize({
           client_id: clientId,
           callback: (response) => {
-            if (onSuccess) {
-              onSuccess(response);
-            }
+            if (onSuccess) onSuccess(response);
           },
           auto_select: false,
           cancel_on_tap_outside: true,
@@ -66,7 +80,6 @@ const GoogleLoginButton = ({ onSuccess }) => {
 
     initializeGoogle();
 
-    // 🧹 Cleanup (important for SPA navigation)
     return () => {
       if (buttonRef.current) {
         buttonRef.current.innerHTML = "";
@@ -77,7 +90,6 @@ const GoogleLoginButton = ({ onSuccess }) => {
 
   return (
     <div className="flex justify-center w-full">
-      {/* 🎬 Custom styled wrapper (matches CineVerse UI) */}
       <div
         ref={buttonRef}
         className="

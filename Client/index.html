@@ -1,16 +1,47 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-<link rel="icon" href="/favicon.png" type="image/png" sizes="32x32" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CineVerse</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+<head>
+  <meta charset="UTF-8" />
 
-  </body>
+  <!-- Viewport -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Title -->
+  <title>CineVerse – Movies, Web Series & Anime</title>
+
+  <!-- SEO -->
+  <meta name="description" content="Watch trending movies, web series, anime and regional content in one place with CineVerse." />
+  <meta name="keywords" content="movies, web series, anime, streaming, cineverse, ott platform" />
+  <meta name="author" content="Partha Gayen" />
+
+  <!-- Favicon -->
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/favicon.png" type="image/png" sizes="32x32" />
+
+  <!-- Theme color (mobile browser UI color) -->
+  <meta name="theme-color" content="#000000" />
+
+  <!-- Open Graph (for sharing links) -->
+  <meta property="og:title" content="CineVerse – Streaming Platform" />
+  <meta property="og:description" content="Discover trending movies, series and anime." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/preview.png" />
+
+  <!-- Preconnect (faster Google services) -->
+  <link rel="preconnect" href="https://accounts.google.com" />
+
+</head>
+
+<body>
+
+  <!-- React Root -->
+  <div id="root"></div>
+
+  <!-- React App -->
+  <script type="module" src="/src/main.jsx"></script>
+
+  <!-- Google Sign-In -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+</body>
 </html>

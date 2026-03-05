@@ -1,40 +1,50 @@
 import { Link } from "react-router-dom";
-import { useState, useMemo } from "react";
+import { useState, useMemo, memo } from "react";
+import { Star } from "lucide-react";
 
-/* IMAGE SIZE OPTIMIZATION */
-const getImageUrl = (path) => {
-  if (!path) return "/placeholder.png";
+/* TMDB IMAGE BASE */
+const IMAGE_BASE = "https://image.tmdb.org/t/p";
 
-  const width = window.innerWidth;
+/* RESPONSIVE IMAGE URLS */
+const getPosterUrls = (path) => {
+  if (!path) return {};
 
-  let size = "w500";
-
-  if (width < 640) size = "w342";        // mobile
-  else if (width < 1024) size = "w500";  // tablet
-  else size = "w780";                    // desktop
-
-  return `https://image.tmdb.org/t/p/${size}${path}`;
+  return {
+    small: `${IMAGE_BASE}/w342${path}`,
+    medium: `${IMAGE_BASE}/w500${path}`,
+    large: `${IMAGE_BASE}/w780${path}`,
+  };
 };
 
 const MovieCard = ({ movie }) => {
   const title = movie.title || movie.name || "Untitled";
+
+  /* MEMOIZED YEAR */
   const year = useMemo(() => {
     const date = movie.release_date || movie.first_air_date;
     return date ? date.slice(0, 4) : "";
-  }, [movie]);
+  }, [movie.release_date, movie.first_air_date]);
 
-  const [imgSrc, setImgSrc] = useState(getImageUrl(movie.poster_path));
+  /* MEMOIZED POSTER URLS */
+  const poster = useMemo(
+    () => getPosterUrls(movie.poster_path),
+    [movie.poster_path],
+  );
+
+  const [imgSrc, setImgSrc] = useState(poster.medium || "/placeholder.png");
 
   return (
-    <Link
-      to={`/movie/${movie.id}`}
-      className="flex-shrink-0 group"
-    >
-      <div className="relative w-[130px] sm:w-[150px] lg:w-[180px] transition-transform duration-300 group-hover:scale-105">
-
+    <Link to={`/movie/${movie.id}`} className="flex-shrink-0 group">
+      <div className="relative w-[130px] sm:w-[150px] lg:w-[180px]">
         {/* POSTER */}
         <img
           src={imgSrc}
+          srcSet={`
+            ${poster.small} 342w,
+            ${poster.medium} 500w,
+            ${poster.large} 780w
+          `}
+          sizes="(max-width:640px) 130px, (max-width:1024px) 150px, 180px"
           alt={title}
           loading="lazy"
           decoding="async"
@@ -45,31 +55,38 @@ const MovieCard = ({ movie }) => {
             w-full
             object-cover
             bg-white/5
-            transition-all
+            transition-transform duration-300
+            group-hover:scale-[1.04]
           "
         />
 
-        {/* PREMIUM HOVER OVERLAY */}
-        <div className="
-          absolute inset-0 rounded-2xl
-          bg-gradient-to-t from-black/80 via-black/30 to-transparent
-          opacity-0 group-hover:opacity-100
-          transition-opacity duration-300
-        " />
+        {/* HOVER OVERLAY */}
+        <div
+          className="
+            absolute inset-0 rounded-2xl
+            bg-gradient-to-t from-black/80 via-black/30 to-transparent
+            opacity-0 group-hover:opacity-100
+            transition-opacity duration-300
+            pointer-events-none
+          "
+        />
 
-        {/* RATING BADGE */}
+        {/* RATING */}
         {movie.vote_average > 0 && (
-          <div className="
-            absolute top-2 right-2
-            bg-black/70 backdrop-blur
-            text-yellow-400 text-xs
-            px-2 py-1 rounded-md
-            font-semibold
-          ">
-            ⭐ {movie.vote_average.toFixed(1)}
+          <div
+            className="
+    absolute top-2 right-2
+    flex items-center gap-1
+    bg-black/70 backdrop-blur
+    text-yellow-400 text-xs
+    px-2 py-1 rounded-md
+    font-semibold
+  "
+          >
+            <Star size={14} className="fill-yellow-400 text-yellow-400" />
+            {movie.vote_average.toFixed(1)}
           </div>
         )}
-
       </div>
 
       {/* TITLE */}
@@ -78,13 +95,9 @@ const MovieCard = ({ movie }) => {
       </h3>
 
       {/* YEAR */}
-      {year && (
-        <p className="text-xs text-white/60 mt-1">
-          {year}
-        </p>
-      )}
+      {year && <p className="text-xs text-white/60 mt-1">{year}</p>}
     </Link>
   );
 };
 
-export default MovieCard;
+export default memo(MovieCard);

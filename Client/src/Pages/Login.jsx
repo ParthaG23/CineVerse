@@ -1,19 +1,48 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { FaGoogle } from "react-icons/fa";
 import GoogleLoginButton from "../components/GoogleLoginButton";
 import Logo from "../components/Logo";
 
 const Login = () => {
   const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+  });
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
 
   const handleGoogleLogin = async (response) => {
     try {
       setLoading(true);
       console.log("Google JWT Token:", response.credential);
-      // TODO: send token to backend later
+      // Send token to backend later
     } catch (err) {
       console.error("Google Login Error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      setLoading(true);
+
+      console.log("Login attempt:", form);
+
+      // TODO: backend login
+      // await loginUser(form)
+
+    } catch (err) {
+      console.error("Login error:", err);
     } finally {
       setLoading(false);
     }
@@ -22,18 +51,18 @@ const Login = () => {
   return (
     <div
       className="
-        min-h-screen 
+        min-h-screen
         flex items-center justify-center
         bg-black
         relative
         overflow-hidden
       "
     >
-      {/* 🎬 BACKGROUND GLOW (Netflix Style) */}
+      {/* Background */}
       <div className="absolute inset-0 bg-gradient-to-br from-black via-slate-900 to-black" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(250,204,21,0.08),transparent_60%)]" />
 
-      {/* 🎥 LOGIN CARD */}
+      {/* Login Card */}
       <div
         className="
           relative z-10
@@ -46,12 +75,12 @@ const Login = () => {
           shadow-[0_0_60px_rgba(0,0,0,0.8)]
         "
       >
-        {/* 🎬 LOGO */}
+        {/* Logo */}
         <div className="flex justify-center mb-6">
           <Logo />
         </div>
 
-        {/* 🎞 TITLE */}
+        {/* Title */}
         <h2 className="text-3xl font-bold text-center text-white mb-2 tracking-wide">
           Sign In to <span className="text-yellow-400">CineVerse</span>
         </h2>
@@ -60,27 +89,32 @@ const Login = () => {
           Unlimited movies, series & anime — all in one place
         </p>
 
-        {/* 🔥 GOOGLE LOGIN (PRIMARY OTT STYLE) */}
+        {/* Google Login */}
         <div className="mb-6">
           <GoogleLoginButton onSuccess={handleGoogleLogin} />
         </div>
 
-        {/* OR DIVIDER */}
+        {/* Divider */}
         <div className="flex items-center gap-3 mb-6">
           <hr className="flex-1 border-white/10" />
           <span className="text-xs text-gray-500 tracking-wider">OR</span>
           <hr className="flex-1 border-white/10" />
         </div>
 
-        {/* 📧 LOGIN FORM */}
-        <form className="space-y-4">
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-xs text-gray-400 mb-1 block">
               Email Address
             </label>
+
             <input
               type="email"
+              name="email"
+              value={form.email}
+              onChange={handleChange}
               placeholder="Enter your email"
+              required
               className="
                 w-full p-3 rounded-xl
                 bg-black/50
@@ -99,9 +133,14 @@ const Login = () => {
             <label className="text-xs text-gray-400 mb-1 block">
               Password
             </label>
+
             <input
               type="password"
+              name="password"
+              value={form.password}
+              onChange={handleChange}
               placeholder="Enter your password"
+              required
               className="
                 w-full p-3 rounded-xl
                 bg-black/50
@@ -116,8 +155,9 @@ const Login = () => {
             />
           </div>
 
-          {/* 🎬 NETFLIX STYLE LOGIN BUTTON */}
+          {/* Login Button */}
           <button
+            type="submit"
             disabled={loading}
             className="
               w-full py-3 mt-2
@@ -134,17 +174,18 @@ const Login = () => {
           </button>
         </form>
 
-        {/* EXTRA OPTIONS */}
+        {/* Options */}
         <div className="flex justify-between items-center mt-4 text-xs text-gray-400">
-          <span className="hover:text-yellow-400 cursor-pointer transition">
+          <button className="hover:text-yellow-400 transition">
             Forgot Password?
-          </span>
-          <span className="hover:text-yellow-400 cursor-pointer transition">
+          </button>
+
+          <button className="hover:text-yellow-400 transition">
             Need Help?
-          </span>
+          </button>
         </div>
 
-        {/* SIGN UP */}
+        {/* Sign Up */}
         <p className="text-sm text-center mt-8 text-gray-400">
           New to CineVerse?{" "}
           <Link
@@ -155,7 +196,7 @@ const Login = () => {
           </Link>
         </p>
 
-        {/* FOOT NOTE (BRAND STYLE) */}
+        {/* Footer Note */}
         <p className="text-[11px] text-center mt-6 text-gray-500">
           Secure login • OTT Experience • Cinematic UI
         </p>

@@ -12,41 +12,43 @@ const UIContext = createContext(null);
 export const UIProvider = ({ children }) => {
   const [sidebarOpen, setSidebarOpenState] = useState(false);
 
-  // 🚀 Memoized open/close handlers (stable references)
+  /* OPEN */
   const openSidebar = useCallback(() => {
     setSidebarOpenState(true);
   }, []);
 
+  /* CLOSE */
   const closeSidebar = useCallback(() => {
     setSidebarOpenState(false);
   }, []);
 
+  /* TOGGLE */
   const toggleSidebar = useCallback(() => {
     setSidebarOpenState((prev) => !prev);
   }, []);
 
-  // 📱 Lock body scroll when sidebar is open (important for mobile UX)
+  /* BODY SCROLL LOCK */
   useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+
     if (sidebarOpen) {
       document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
     }
 
-    // cleanup on unmount (safety)
     return () => {
-      document.body.style.overflow = "";
+      document.body.style.overflow = prevOverflow;
     };
   }, [sidebarOpen]);
 
-  // 🧠 CRITICAL: Memoized context value (prevents layout re-renders)
+  /* MEMOIZED CONTEXT VALUE */
   const value = useMemo(
     () => ({
       sidebarOpen,
       openSidebar,
       closeSidebar,
       toggleSidebar,
-      // keep backward compatibility with your existing code
+
+      // keep compatibility with existing code
       setSidebarOpen: setSidebarOpenState,
     }),
     [sidebarOpen, openSidebar, closeSidebar, toggleSidebar]
@@ -55,11 +57,13 @@ export const UIProvider = ({ children }) => {
   return <UIContext.Provider value={value}>{children}</UIContext.Provider>;
 };
 
-// 🔒 Safe hook (production best practice)
+/* SAFE HOOK */
 export const useUI = () => {
   const context = useContext(UIContext);
+
   if (!context) {
     throw new Error("useUI must be used within UIProvider");
   }
+
   return context;
 };

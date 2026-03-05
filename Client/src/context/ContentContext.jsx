@@ -10,52 +10,56 @@ import {
 const ContentContext = createContext(null);
 
 const VALID_TYPES = ["movie", "tv", "anime"];
+const STORAGE_KEY = "contentType";
+
+/* SAFE STORAGE READ */
+const getStoredType = () => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return VALID_TYPES.includes(stored) ? stored : "movie";
+  } catch {
+    return "movie";
+  }
+};
 
 export const ContentProvider = ({ children }) => {
-  // 🔥 Lazy init (faster + persistent UX)
-  const [contentType, setContentTypeState] = useState(() => {
-    try {
-      return localStorage.getItem("contentType") || "movie";
-    } catch {
-      return "movie";
-    }
-  });
-
+  /* LAZY INIT */
+  const [contentType, setContentTypeState] = useState(getStoredType);
   const [searchQuery, setSearchQueryState] = useState("");
 
-  // 🚀 Optimized setter (validated + memoized)
+  /* SET CONTENT TYPE */
   const setContentType = useCallback((type) => {
     if (!VALID_TYPES.includes(type)) return;
 
-    setContentTypeState(type);
-    try {
-      localStorage.setItem("contentType", type);
-    } catch (err) {
-      console.error("Storage error:", err);
-    }
-  }, []);
+    setContentTypeState((prev) => {
+      if (prev === type) return prev;
 
-  // ⚡ Memoized search setter (prevents useless updates)
-  const setSearchQuery = useCallback((query) => {
-    setSearchQueryState((prev) => {
-      if (prev === query) return prev; // prevent re-render if same
-      return query;
+      try {
+        localStorage.setItem(STORAGE_KEY, type);
+      } catch {}
+
+      return type;
     });
   }, []);
 
-  // 🔄 Optional: Clear search when content type changes (better UX)
+  /* SET SEARCH QUERY */
+  const setSearchQuery = useCallback((query) => {
+    setSearchQueryState((prev) => (prev === query ? prev : query));
+  }, []);
+
+  /* CLEAR SEARCH WHEN TYPE CHANGES */
   useEffect(() => {
     setSearchQueryState("");
   }, [contentType]);
 
-  // 🧠 CRITICAL: Memoized context value (BIG performance boost)
+  /* MEMOIZED VALUE */
   const value = useMemo(
     () => ({
       contentType,
       setContentType,
       searchQuery,
       setSearchQuery,
-      isSearching: searchQuery.trim().length > 0,
+      isSearching: Boolean(searchQuery.trim()),
     }),
     [contentType, searchQuery, setContentType, setSearchQuery]
   );
@@ -67,7 +71,7 @@ export const ContentProvider = ({ children }) => {
   );
 };
 
-// 🔒 Safe hook (production best practice)
+/* SAFE HOOK */
 export const useContent = () => {
   const context = useContext(ContentContext);
   if (!context) {

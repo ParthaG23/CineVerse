@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+
 import MovieRow from "../components/MovieRow";
 import BannerCarousel from "../components/BannerCarousel";
 import SkeletonCardLoader from "../components/SkeletonCardLoader";
@@ -11,7 +12,7 @@ import {
   searchContent,
   getTopRated,
   getPopular,
-  getTopRatedByRegion
+  getTopRatedByRegion,
 } from "../services/tmdb";
 
 import { useContent } from "../context/ContentContext";
@@ -40,100 +41,104 @@ const CategoryPage = () => {
 
   const config = categoryMap[type];
 
-  const loadCategoryData = useCallback(async () => {
+  useEffect(() => {
     if (!config) return;
 
-    let active = true;
+    let cancelled = false;
 
-    try {
-      setLoading(true);
+    const loadData = async () => {
+      try {
+        setLoading(true);
 
-      /* SEARCH MODE */
-      if (searchQuery && searchQuery.trim() !== "") {
-        const results = await searchContent(contentType, searchQuery);
+        /* SEARCH MODE */
 
-        if (!active) return;
+        if (searchQuery && searchQuery.trim()) {
+          const results = await searchContent(contentType, searchQuery);
+
+          if (cancelled) return;
+
+          setMovies(results);
+          setBanner([]);
+          setTopRated([]);
+          setRecommended([]);
+          return;
+        }
+
+        let results = [];
+        let baseType = "movie";
+
+        /* MAIN CATEGORY CONTENT */
+
+        if (config.custom === "hindi-dubbed") {
+          results = await getHindiDubbed();
+        } 
+        else if (config.type === "tv") {
+          results = await getTrending("tv");
+          baseType = "tv";
+        } 
+        else if (config.language) {
+          results = await getMoviesByRegion("movie", null, config.language);
+        } 
+        else if (config.region) {
+          results = await getMoviesByRegion("movie", config.region, null);
+        }
+
+        if (cancelled) return;
+
+        /* MAIN CONTENT FIRST (better LCP) */
 
         setMovies(results);
-        setBanner([]);
-        setTopRated([]);
-        setRecommended([]);
-        return;
+        setBanner(results.slice(0, 5));
+
+        /* PARALLEL SECONDARY LOAD */
+
+        let topPromise;
+        let recPromise;
+
+        if (config.language) {
+          topPromise = getTopRatedByRegion("movie", null, config.language);
+          recPromise = getMoviesByRegion("movie", null, config.language);
+        } 
+        else if (config.region) {
+          topPromise = getTopRatedByRegion("movie", config.region, null);
+          recPromise = getMoviesByRegion("movie", config.region, null);
+        } 
+        else {
+          topPromise = getTopRated(baseType);
+          recPromise = getPopular(baseType);
+        }
+
+        const [top, popular] = await Promise.all([topPromise, recPromise]);
+
+        if (cancelled) return;
+
+        setTopRated(top.slice(0, 15));
+        setRecommended(popular.slice(0, 15));
+
+      } catch (err) {
+        console.error("Category Load Error:", err);
+
+        if (!cancelled) {
+          setMovies([]);
+          setBanner([]);
+          setTopRated([]);
+          setRecommended([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-
-      let results = [];
-      let baseType = "movie";
-
-      /* MAIN CATEGORY CONTENT */
-
-      if (config.custom === "hindi-dubbed") {
-        results = await getHindiDubbed();
-      }
-      else if (config.type === "tv") {
-        results = await getTrending("tv");
-        baseType = "tv";
-      }
-      else if (config.language) {
-        results = await getMoviesByRegion("movie", null, config.language);
-      }
-      else if (config.region) {
-        results = await getMoviesByRegion("movie", config.region, null);
-      }
-
-      if (!active) return;
-
-      /* MAIN CONTENT FIRST */
-
-      setMovies(results);
-      setBanner(results.slice(0, 5));
-
-      /* PARALLEL LOADING */
-
-      let topPromise;
-      let recommendedPromise;
-
-      if (config.language) {
-        topPromise = getTopRatedByRegion("movie", null, config.language);
-        recommendedPromise = getMoviesByRegion("movie", null, config.language);
-      }
-      else if (config.region) {
-        topPromise = getTopRatedByRegion("movie", config.region, null);
-        recommendedPromise = getMoviesByRegion("movie", config.region, null);
-      }
-      else {
-        topPromise = getTopRated(baseType);
-        recommendedPromise = getPopular(baseType);
-      }
-
-      const [top, popular] = await Promise.all([topPromise, recommendedPromise]);
-
-      if (!active) return;
-
-      setTopRated(top.slice(0, 15));
-      setRecommended(popular.slice(0, 15));
-
-    } catch (err) {
-      console.error("Category Load Error:", err);
-
-      setMovies([]);
-      setBanner([]);
-      setTopRated([]);
-      setRecommended([]);
-    } finally {
-      setLoading(false);
-    }
-
-    return () => {
-      active = false;
     };
 
-  }, [type, contentType, searchQuery]);
-
-  useEffect(() => {
     setTopRated([]);
     setRecommended([]);
-    loadCategoryData();
-  }, [loadCategoryData]);
+
+    loadData();
+
+    return () => {
+      cancelled = true;
+    };
+
+  }, [type, contentType, searchQuery, config]);
 
   if (!config) {
     return <p className="text-white p-6">Category Not Found</p>;

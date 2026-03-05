@@ -11,7 +11,7 @@ const options = [
 ];
 
 const TopBar = () => {
-  const { sidebarOpen, setSidebarOpen } = useUI();
+  const { setSidebarOpen } = useUI();
   const { contentType, setContentType, setSearchQuery } = useContent();
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -21,35 +21,51 @@ const TopBar = () => {
   const dropdownRef = useRef(null);
   const debounceRef = useRef(null);
 
-  // 🚀 Optimized Debounced Search (Prevents excessive re-renders)
+  /* DEBOUNCED SEARCH */
+  const triggerSearch = useCallback(
+    (value) => {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        setSearchQuery(value.trim());
+      }, 500);
+    },
+    [setSearchQuery]
+  );
+
   useEffect(() => {
-    clearTimeout(debounceRef.current);
-
-    debounceRef.current = setTimeout(() => {
-      setSearchQuery(localQuery.trim());
-    }, 500); // slightly higher = better performance
-
+    triggerSearch(localQuery);
     return () => clearTimeout(debounceRef.current);
-  }, [localQuery, setSearchQuery]);
+  }, [localQuery, triggerSearch]);
 
-  // 🎯 Close dropdown on outside click (UX + accessibility)
+  /* CLOSE DROPDOWN OUTSIDE CLICK */
   useEffect(() => {
-    const handleClickOutside = (e) => {
+    if (!dropdownOpen) return;
+
+    const handleOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setDropdownOpen(false);
       }
     };
 
-    if (dropdownOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
+    document.addEventListener("pointerdown", handleOutside, true);
 
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("pointerdown", handleOutside, true);
     };
   }, [dropdownOpen]);
 
-  // ⚡ Memoized handlers (reduces child re-renders)
+  /* ESC KEY CLOSE */
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (e.key === "Escape") setDropdownOpen(false);
+    };
+
+    if (dropdownOpen) document.addEventListener("keydown", handleKey);
+
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [dropdownOpen]);
+
+  /* CHANGE CONTENT TYPE */
   const handleContentChange = useCallback(
     (value) => {
       setContentType(value);
@@ -60,14 +76,12 @@ const TopBar = () => {
     [setContentType, setSearchQuery]
   );
 
-  if (sidebarOpen) return null;
-
   const activeLabel =
     options.find((o) => o.value === contentType)?.label || "Movies";
 
   return (
     <>
-      {/* 🔝 FIXED TOP BAR */}
+      {/* TOP BAR */}
       <header
         className="
           fixed top-0 left-0 right-0 lg:left-56
@@ -77,10 +91,9 @@ const TopBar = () => {
         "
       >
         <div className="flex items-center justify-between lg:grid lg:grid-cols-[auto_1fr_auto]">
-          
-          {/* LEFT SECTION */}
+
+          {/* LEFT */}
           <div className="flex items-center gap-3">
-            {/* 📱 Mobile Menu */}
             <button
               onClick={() => setSidebarOpen(true)}
               aria-label="Open menu"
@@ -89,10 +102,12 @@ const TopBar = () => {
               <FiMenu size={22} />
             </button>
 
-            {/* 🎬 Content Type Dropdown */}
+            {/* CONTENT TYPE */}
             <div ref={dropdownRef} className="relative lg:ml-6">
               <button
-                onClick={() => setDropdownOpen((prev) => !prev)}
+                onClick={() => setDropdownOpen((p) => !p)}
+                aria-expanded={dropdownOpen}
+                aria-haspopup="listbox"
                 className="
                   bg-black/40 backdrop-blur-xl
                   rounded-xl px-4 py-2
@@ -101,8 +116,6 @@ const TopBar = () => {
                   border border-white/10
                   hover:bg-black/60 transition
                 "
-                aria-expanded={dropdownOpen}
-                aria-haspopup="listbox"
               >
                 {activeLabel}
                 <span className="text-xs">▾</span>
@@ -110,13 +123,13 @@ const TopBar = () => {
 
               {dropdownOpen && (
                 <div
+                  role="listbox"
                   className="
                     absolute mt-2 w-44 z-50
                     bg-black/80 backdrop-blur-xl
                     rounded-xl overflow-hidden
                     border border-white/10 shadow-xl
                   "
-                  role="listbox"
                 >
                   {options.map((opt) => (
                     <button
@@ -136,7 +149,7 @@ const TopBar = () => {
             </div>
           </div>
 
-          {/* 🔎 DESKTOP SEARCH */}
+          {/* DESKTOP SEARCH */}
           <div className="hidden lg:flex justify-center">
             <div
               className="
@@ -163,10 +176,10 @@ const TopBar = () => {
             </div>
           </div>
 
-          {/* 📱 MOBILE SEARCH ICON */}
+          {/* MOBILE SEARCH ICON */}
           <div className="flex items-center justify-end">
             <button
-              onClick={() => setMobileSearchOpen((prev) => !prev)}
+              onClick={() => setMobileSearchOpen((p) => !p)}
               aria-label="Search"
               className="lg:hidden p-2 text-white hover:text-yellow-400 transition"
             >
@@ -175,7 +188,7 @@ const TopBar = () => {
           </div>
         </div>
 
-        {/* 📱 MOBILE SEARCH BAR */}
+        {/* MOBILE SEARCH */}
         {mobileSearchOpen && (
           <div className="mt-3 lg:hidden">
             <div
@@ -203,11 +216,10 @@ const TopBar = () => {
         )}
       </header>
 
-      {/* 🧱 Spacer (prevents content overlap) */}
+      {/* SPACER */}
       <div className="h-[72px] lg:h-[88px]" />
     </>
   );
 };
 
-// 🧠 Memo = Prevent unnecessary re-renders on every keystroke
 export default memo(TopBar);

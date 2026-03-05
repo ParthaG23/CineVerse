@@ -8,29 +8,27 @@ const Movies = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let isMounted = true; // prevents memory leaks
+    let cancelled = false;
 
     const fetchMovies = async () => {
       try {
-        setLoading(true);
-
-        // 🚀 Optimized service (already cached & faster)
         const results = await getTrending("movie");
 
-        if (!isMounted) return;
-        setMovies(results || []);
+        if (!cancelled) {
+          setMovies(results || []);
+        }
       } catch (error) {
         console.error("Movies Fetch Error:", error);
-        if (isMounted) setMovies([]);
+        if (!cancelled) setMovies([]);
       } finally {
-        if (isMounted) setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchMovies();
 
     return () => {
-      isMounted = false; // cleanup for performance
+      cancelled = true;
     };
   }, []);
 
@@ -40,16 +38,17 @@ const Movies = () => {
         Trending Movies
       </h1>
 
-      {/* 🎬 Skeleton Loader (Better UX + Performance) */}
-      {loading ? (
-        <SkeletonCardLoader count={12} />
-      ) : movies.length > 0 ? (
+      {loading && <SkeletonCardLoader count={12} />}
+
+      {!loading && movies.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {movies.map((movie) => (
             <MovieCard key={movie.id} movie={movie} />
           ))}
         </div>
-      ) : (
+      )}
+
+      {!loading && movies.length === 0 && (
         <p className="text-white/70 mt-6">No movies found</p>
       )}
     </div>
