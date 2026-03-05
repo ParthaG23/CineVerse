@@ -1,48 +1,69 @@
+# Dependencies
+
+node_modules/
+
+# Production build
+
+dist/
+build/
+
 # Logs
+
 logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Runtime files
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+pids
+*.pid
+*.seed
+*.pid.lock
 
-# dependencies
-node_modules/
+# Coverage
 
-# build output
-dist/
-
-# environment variables
-
-
-# logs
-npm-debug.log*
-yarn-debug.log*
-pnpm-debug.log*
+coverage/
 
 # OS files
+
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# IDEs
+# Editor folders
+
 .vscode/
 .idea/
 
+# Cache
 
+.cache/
+.parcel-cache/
+
+# Temporary files
+
+tmp/
+temp/
+
+# Optional npm cache
+
+.npm
+
+# ESLint cache
+
+.eslintcache
+
+# TypeScript
+
+*.tsbuildinfo
+
+# Vercel
+
+.vercel
+
+# Debug archives
+
+*.tgz
+*.gz
