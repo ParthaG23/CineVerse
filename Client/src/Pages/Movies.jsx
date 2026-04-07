@@ -1,36 +1,49 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import MovieCard from "../components/MovieCard";
 import SkeletonCardLoader from "../components/SkeletonCardLoader";
-import { getTrending } from "../services/tmdb";
+import ErrorState from "../components/ErrorState";
+import { getTrending, clearCache } from "../services/tmdb";
 
 const Movies = () => {
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchMovies = useCallback(async (cancelled) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const results = await getTrending("movie");
+
+      if (!cancelled?.current) {
+        setMovies(results || []);
+      }
+    } catch (err) {
+      console.error("Movies Fetch Error:", err);
+      if (!cancelled?.current) {
+        setMovies([]);
+        setError(err);
+      }
+    } finally {
+      if (!cancelled?.current) setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const fetchMovies = async () => {
-      try {
-        const results = await getTrending("movie");
-
-        if (!cancelled) {
-          setMovies(results || []);
-        }
-      } catch (error) {
-        console.error("Movies Fetch Error:", error);
-        if (!cancelled) setMovies([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    fetchMovies();
+    const cancelled = { current: false };
+    fetchMovies(cancelled);
 
     return () => {
-      cancelled = true;
+      cancelled.current = true;
     };
-  }, []);
+  }, [fetchMovies]);
+
+  const handleRetry = () => {
+    clearCache();
+    setError(null);
+    fetchMovies({ current: false });
+  };
 
   return (
     <div className="px-6 py-6">
@@ -40,7 +53,14 @@ const Movies = () => {
 
       {loading && <SkeletonCardLoader count={12} />}
 
-      {!loading && movies.length > 0 && (
+      {!loading && error && (
+        <ErrorState
+          type="network"
+          onRetry={handleRetry}
+        />
+      )}
+
+      {!loading && !error && movies.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {movies.map((movie) => (
             <MovieCard key={movie.id} movie={movie} />
@@ -48,8 +68,12 @@ const Movies = () => {
         </div>
       )}
 
-      {!loading && movies.length === 0 && (
-        <p className="text-white/70 mt-6">No movies found</p>
+      {!loading && !error && movies.length === 0 && (
+        <ErrorState
+          type="empty"
+          message="No movies found. Try again later."
+          onRetry={handleRetry}
+        />
       )}
     </div>
   );

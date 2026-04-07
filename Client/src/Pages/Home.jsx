@@ -7,6 +7,7 @@ import {
   searchContent,
   getTopRated,
   getPopular,
+  clearCache,
 } from "../services/tmdb";
 
 import { useContent } from "../context/ContentContext";
@@ -15,6 +16,7 @@ import BannerCarousel from "../components/BannerCarousel";
 import MovieRow from "../components/MovieRow";
 import CategoryPills from "../components/CategoryPills";
 import SkeletonCardLoader from "../components/SkeletonCardLoader";
+import ErrorState from "../components/ErrorState";
 
 /* GENRE MAP */
 
@@ -49,12 +51,14 @@ const Home = () => {
   const [recommended, setRecommended] = useState([]);
   const [activeCategory, setActiveCategory] = useState("Trending");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   /* CATEGORY LOADER */
 
   const loadCategoryMovies = useCallback(async (category, type, cancelled) => {
     try {
       setLoading(true);
+      setError(null);
 
       let results = [];
 
@@ -82,6 +86,7 @@ const Home = () => {
       if (!cancelled.current) {
         setMovies([]);
         setBannerMovies([]);
+        setError(err);
       }
 
     } finally {
@@ -118,6 +123,7 @@ const Home = () => {
     const searchMovies = async () => {
       try {
         setLoading(true);
+        setError(null);
 
         const results = await searchContent(contentType, searchQuery);
 
@@ -129,7 +135,10 @@ const Home = () => {
       } catch (err) {
         console.error("Search Error:", err);
 
-        if (!cancelled.current) setMovies([]);
+        if (!cancelled.current) {
+          setMovies([]);
+          setError(err);
+        }
 
       } finally {
         if (!cancelled.current) setLoading(false);
@@ -177,6 +186,38 @@ const Home = () => {
 
   }, [contentType, searchQuery, loadExtraSections]);
 
+  /* RETRY HANDLER */
+
+  const handleRetry = useCallback(() => {
+    clearCache();
+    setError(null);
+    setLoading(true);
+
+    const cancelled = { current: false };
+
+    if (searchQuery?.trim()) {
+      searchContent(contentType, searchQuery)
+        .then((results) => {
+          if (!cancelled.current) {
+            setMovies(results);
+            setBannerMovies([]);
+          }
+        })
+        .catch((err) => {
+          if (!cancelled.current) {
+            setMovies([]);
+            setError(err);
+          }
+        })
+        .finally(() => {
+          if (!cancelled.current) setLoading(false);
+        });
+    } else {
+      loadCategoryMovies(activeCategory, contentType, cancelled);
+      loadExtraSections(contentType, cancelled);
+    }
+  }, [activeCategory, contentType, searchQuery, loadCategoryMovies, loadExtraSections]);
+
   return (
     <>
       {/* Banner */}
@@ -206,6 +247,11 @@ const Home = () => {
         <div className="px-6 mt-6 text-white">
           <SkeletonCardLoader />
         </div>
+      ) : error ? (
+        <ErrorState
+          type="network"
+          onRetry={handleRetry}
+        />
       ) : movies.length > 0 ? (
         <motion.div
           className="px-6"
@@ -216,7 +262,11 @@ const Home = () => {
           <MovieRow movies={movies} />
         </motion.div>
       ) : (
-        <p className="text-white px-6 mt-6">No results found</p>
+        <ErrorState
+          type="empty"
+          message="No results found for your search. Try different keywords."
+          onRetry={handleRetry}
+        />
       )}
 
       {/* Top Rated */}

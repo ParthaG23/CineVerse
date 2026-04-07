@@ -7,7 +7,6 @@ import api from "./api";
 const cache = new Map();
 const pendingRequests = new Map();
 const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
-const REQUEST_TIMEOUT = 8000;
 
 /* =========================
    CACHE + REQUEST DEDUP
@@ -16,7 +15,7 @@ const REQUEST_TIMEOUT = 8000;
 const fetchWithCache = async (key, requestFn) => {
   const now = Date.now();
 
-  // Cached result
+  // Return cached result if still valid
   if (cache.has(key)) {
     const cached = cache.get(key);
 
@@ -27,7 +26,7 @@ const fetchWithCache = async (key, requestFn) => {
     cache.delete(key);
   }
 
-  // Prevent duplicate requests
+  // Prevent duplicate in-flight requests
   if (pendingRequests.has(key)) {
     return pendingRequests.get(key);
   }
@@ -47,12 +46,30 @@ const fetchWithCache = async (key, requestFn) => {
     .catch((error) => {
       console.error("TMDB Error:", error?.message || error);
       pendingRequests.delete(key);
-      return [];
+
+      // Throw so callers can show proper error state
+      throw error;
     });
 
   pendingRequests.set(key, requestPromise);
 
   return requestPromise;
+};
+
+/* =========================
+   SAFE WRAPPER
+   
+   Wraps a request so it never throws.
+   Returns [] on failure instead.
+   Use for secondary/optional sections.
+========================= */
+
+const safeRequest = async (requestFn) => {
+  try {
+    return await requestFn();
+  } catch {
+    return [];
+  }
 };
 
 /* =========================
@@ -69,13 +86,12 @@ export const getTrending = (type = "movie") => {
           with_genres: 16,
           sort_by: "popularity.desc",
         },
-        timeout: REQUEST_TIMEOUT,
       })
     );
   }
 
   return fetchWithCache(key, () =>
-    api.get(`/trending/${type}/week`, { timeout: REQUEST_TIMEOUT })
+    api.get(`/trending/${type}/week`)
   );
 };
 
@@ -93,7 +109,6 @@ export const getMoviesByGenre = (type = "movie", genreId) => {
           with_genres: 16,
           sort_by: "popularity.desc",
         },
-        timeout: REQUEST_TIMEOUT,
       })
     );
   }
@@ -104,7 +119,6 @@ export const getMoviesByGenre = (type = "movie", genreId) => {
         with_genres: genreId,
         sort_by: "popularity.desc",
       },
-      timeout: REQUEST_TIMEOUT,
     })
   );
 };
@@ -117,7 +131,7 @@ export const getPopular = (type = "movie") => {
   const key = `popular-${type}`;
 
   return fetchWithCache(key, () =>
-    api.get(`/${type}/popular`, { timeout: REQUEST_TIMEOUT })
+    api.get(`/${type}/popular`)
   );
 };
 
@@ -129,7 +143,7 @@ export const getTopRated = (type = "movie") => {
   const key = `top-rated-${type}`;
 
   return fetchWithCache(key, () =>
-    api.get(`/${type}/top_rated`, { timeout: REQUEST_TIMEOUT })
+    api.get(`/${type}/top_rated`)
   );
 };
 
@@ -139,9 +153,7 @@ export const getTopRated = (type = "movie") => {
 
 export const getDetails = async (id, type = "movie") => {
   try {
-    return await api.get(`/${type}/${id}`, {
-      timeout: REQUEST_TIMEOUT,
-    });
+    return await api.get(`/${type}/${id}`);
   } catch (error) {
     console.error("Details Error:", error);
     return null;
@@ -154,10 +166,7 @@ export const getDetails = async (id, type = "movie") => {
 
 export const getVideos = async (id, type = "movie") => {
   try {
-    const res = await api.get(`/${type}/${id}/videos`, {
-      timeout: REQUEST_TIMEOUT,
-    });
-
+    const res = await api.get(`/${type}/${id}/videos`);
     return res?.results || [];
   } catch (error) {
     console.error("Videos Error:", error);
@@ -177,13 +186,12 @@ export const searchContent = async (type = "movie", query) => {
 
     const res = await api.get(endpoint, {
       params: { query },
-      timeout: REQUEST_TIMEOUT,
     });
 
     return res?.results || [];
   } catch (error) {
     console.error("Search Error:", error);
-    return [];
+    throw error;
   }
 };
 
@@ -193,9 +201,7 @@ export const searchContent = async (type = "movie", query) => {
 
 export const getMovieCredits = async (id, type = "movie") => {
   try {
-    return await api.get(`/${type}/${id}/credits`, {
-      timeout: REQUEST_TIMEOUT,
-    });
+    return await api.get(`/${type}/${id}/credits`);
   } catch (error) {
     console.error("Credits Error:", error);
     return { cast: [], crew: [] };
@@ -211,23 +217,27 @@ export const getMoviesByRegion = async (
   region = null,
   language = null
 ) => {
-  try {
-    const res = await api.get(`/discover/${type}`, {
-      params: {
-        sort_by: "popularity.desc",
-        region: region || undefined,
-        with_original_language: language || undefined,
-        include_adult: false,
-      },
-      timeout: REQUEST_TIMEOUT,
-    });
+  const res = await api.get(`/discover/${type}`, {
+    params: {
+      sort_by: "popularity.desc",
+      region: region || undefined,
+      with_original_language: language || undefined,
+      include_adult: false,
+    },
+  });
 
-    return res?.results || [];
-  } catch (error) {
-    console.error("Region Movies Error:", error);
-    return [];
-  }
+  return res?.results || [];
 };
+
+/* =========================
+   REGION MOVIES (SAFE)
+   
+   Same as getMoviesByRegion but never throws.
+   Use for secondary sections in CategoryPage.
+========================= */
+
+export const getMoviesByRegionSafe = (type, region, language) =>
+  safeRequest(() => getMoviesByRegion(type, region, language));
 
 /* =========================
    HINDI DUBBED
@@ -244,7 +254,6 @@ export const getHindiDubbed = () => {
         with_original_language: "en",
         language: "hi-IN",
       },
-      timeout: REQUEST_TIMEOUT,
     })
   );
 };
@@ -258,21 +267,41 @@ export const getTopRatedByRegion = async (
   region = null,
   language = null
 ) => {
-  try {
-    const res = await api.get(`/discover/${type}`, {
-      params: {
-        sort_by: "vote_average.desc",
-        "vote_count.gte": 200,
-        include_adult: false,
-        region: region || undefined,
-        with_original_language: language || undefined,
-      },
-      timeout: REQUEST_TIMEOUT,
-    });
+  const res = await api.get(`/discover/${type}`, {
+    params: {
+      sort_by: "vote_average.desc",
+      "vote_count.gte": 200,
+      include_adult: false,
+      region: region || undefined,
+      with_original_language: language || undefined,
+    },
+  });
 
-    return res?.results || [];
-  } catch (error) {
-    console.error("Top Rated Region Error:", error);
-    return [];
-  }
+  return res?.results || [];
+};
+
+/* =========================
+   TOP RATED REGION (SAFE)
+========================= */
+
+export const getTopRatedByRegionSafe = (type, region, language) =>
+  safeRequest(() => getTopRatedByRegion(type, region, language));
+
+/* =========================
+   SAFE VERSIONS OF EXISTING
+========================= */
+
+export const getTopRatedSafe = (type) =>
+  safeRequest(() => getTopRated(type));
+
+export const getPopularSafe = (type) =>
+  safeRequest(() => getPopular(type));
+
+/* =========================
+   CACHE MANAGEMENT
+========================= */
+
+export const clearCache = () => {
+  cache.clear();
+  pendingRequests.clear();
 };

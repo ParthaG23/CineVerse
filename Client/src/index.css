@@ -45,7 +45,7 @@ html, body, #root {
   scrollbar-width: none;
 }
 
-/* Cinematic custom scrollbar */
+/* Cinematic custom scrollbar
 
 ::-webkit-scrollbar {
   width: 6px;
@@ -72,4 +72,4 @@ html, body, #root {
   100% {
     transform: translateX(100%);
   }
-}
+} */
